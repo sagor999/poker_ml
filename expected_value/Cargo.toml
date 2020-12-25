@@ -1,0 +1,12 @@
+[package]
+name = "poker_ev"
+version = "0.1.0"
+authors = ["Pavel Tumik <pavel.tumik@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+itertools = "0.9.0"
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3.1"
