@@ -9,3 +9,10 @@ card_recognizer_ml/data/cp.ckpt.data-00000-of-00001
 card_recognizer_ml/data/cp.ckpt.index
 data.bin
 starting_hands.bin
+card_recognizer_ml/data/test/1.png
+card_recognizer_ml/data/test/2.png
+card_recognizer_ml/data/test/3.png
+card_recognizer_ml/data/test/4.png
+card_recognizer_ml/data/test/5.png
+card_recognizer_ml/data/test/6.png
+card_recognizer_ml/data/test/7.png

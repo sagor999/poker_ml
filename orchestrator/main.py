@@ -42,7 +42,7 @@ while (True):
     time.sleep(0.5) # wait for animations to finish
     for i in range(len(scan_areas)):
       im2 = ImageGrab.grab(bbox=scan_areas[i])
-      im2.save("card_recognizer_ml/data/test/{}.png".format(i))
+      im2.save("card_recognizer_ml/data/test/{}.png".format(i+1))
       prev_scans[i] = im2
 
     stream = os.popen('docker exec '+docker_inst+' python /src/main.py')
