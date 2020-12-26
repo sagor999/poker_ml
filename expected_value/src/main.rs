@@ -211,6 +211,9 @@ fn conv_string_to_cards(s: &str) -> Vec<Card> {
   let parts: Vec<&str> = s.split(' ').collect();
   let mut res = Vec::new();
   for p in parts {
+    if p == "Empty" {
+      continue;
+    }
     let card = p.parse::<Card>().unwrap();
     res.push(card);
   }
@@ -457,10 +460,16 @@ fn main() -> Result<(), Error> {
   }
 
   let input_cards = conv_string_to_cards(&input);
-  if input_cards.len() < 5 {
-    panic!("not enough cards");
+
+  if input_cards.len() == 2 {
+    println!("hand cards: {:?}", input_cards);
+    return Ok(())
   }
-  
+  if input_cards.len() < 5 {
+    println!("not enough cards, only got: {:?}", input_cards);
+    return Ok(())
+  }
+
   let mut hand = Vec::<Card>::new();
   let mut community = Vec::<Card>::new();
   hand.push(input_cards[0]);
