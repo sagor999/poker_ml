@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::num::ParseIntError;
 use std::fmt;
 use std::collections::HashMap;
-use std::collections::HashSet;
+//use std::collections::HashSet;
 use itertools::Itertools;
 use std::cmp::Ordering;
 use serde::{Serialize, Deserialize};
@@ -258,6 +258,17 @@ fn find_possible_hands_in_all_combinations(cards: &Vec<&Card>, combinations: &Ha
   return possible_hands
 }
 
+fn find_possible_hands_in_all_combinations_no_ref(cards: &Vec<Card>, combinations: &HashMap<Vec<Card>,(f32,f32)>) -> Vec<Vec<Card>> {
+  let mut possible_hands = Vec::new();
+  for (k, _) in combinations {
+    if find_common_cards_in_pack_no_ref(cards, k) == cards.len() {
+      possible_hands.push(k.to_vec());
+    }
+  }
+  return possible_hands
+}
+
+
 /*
 High card → 0 to 14
 Pair → 15 to 29
@@ -435,11 +446,12 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
 
 fn main() -> Result<(), Error> {
   let mut combinations = HashMap::new();
-  if Path::new("data.bin").exists() {
-    let f = BufReader::new(File::open("data.bin").unwrap());
+  let mut starting_hands = HashMap::new();
+  if Path::new("/home/pavel/nvme/GitHub/poker_ml/data.bin").exists() {
+    let f = BufReader::new(File::open("/home/pavel/nvme/GitHub/poker_ml/data.bin").unwrap());
     combinations = bincode::deserialize_from(f).unwrap();
   } else {
-    let vec = read(File::open("hands.csv")?)?;
+    let vec = read(File::open("/home/pavel/nvme/GitHub/poker_ml/expected_value/hands.csv")?)?;
     for i in 0..vec.len() {
       let v = &vec[i];
       let equity = i as f32/vec.len() as f32;
@@ -448,21 +460,50 @@ fn main() -> Result<(), Error> {
       combinations.insert(v.cards.to_vec(), (v.value, equity));
     }
   
-    let mut f = BufWriter::new(File::create("data.bin").unwrap());
+    let mut f = BufWriter::new(File::create("~/nvme/GitHub/poker_ml/data.bin").unwrap());
     bincode::serialize_into(&mut f, &combinations).unwrap();
   }
 
+  if Path::new("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").exists() {
+    let f = BufReader::new(File::open("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").unwrap());
+    starting_hands = bincode::deserialize_from(f).unwrap();
+  } else {
+    let card_deck = conv_string_to_cards("2c 3c 4c 5c 6c 7c 8c 9c Tc Jc Qc Kc Ac 2h 3h 4h 5h 6h 7h 8h 9h Th Jh Qh Kh Ah 2s 3s 4s 5s 6s 7s 8s 9s Ts Js Qs Ks As 2d 3d 4d 5d 6d 7d 8d 9d Td Jd Qd Kd Ad");
+    for i in 0..card_deck.len() {
+      for j in (i+1)..card_deck.len() {
+        let mut hand = vec![card_deck[i], card_deck[j]];
+        hand.sort();
+        let found_hands = find_possible_hands_in_all_combinations_no_ref(&hand, &combinations);
+        let mut total_eq = 0.0;
+        let num_hands = found_hands.len() as f32;
+        for h in found_hands {
+          let (hscore, hequity) = combinations[&h];
+          total_eq = total_eq + hequity;
+        }
+        let aver_eq = total_eq/num_hands;
+        println!("starting hand: {:?} - {:.2}%", hand, aver_eq*100.0);
+
+        starting_hands.insert(hand, aver_eq);
+      }
+    }
+
+    let mut f = BufWriter::new(File::create("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").unwrap());
+    bincode::serialize_into(&mut f, &starting_hands).unwrap();
+  }
+
   let args: Vec<String> = env::args().collect();
-  println!("args: {:?}", args);
+  //println!("args: {:?}", args);
   let mut input: String = "C8 H5 H7 D12 D6".to_string();
   if args.len() == 2 {
     input = args[1].to_string();
   }
 
-  let input_cards = conv_string_to_cards(&input);
+  let mut input_cards = conv_string_to_cards(&input);
 
   if input_cards.len() == 2 {
-    println!("hand cards: {:?}", input_cards);
+    input_cards.sort();
+    let start_eq = starting_hands[&input_cards];
+    println!("hand cards: {:?}, eq: {:.2}%", input_cards, start_eq*100.0);
     return Ok(())
   }
   if input_cards.len() < 5 {
@@ -489,7 +530,7 @@ fn main() -> Result<(), Error> {
 
   let mut min_future_eq = 10000.0;
   let mut max_future_eq = 0.0;
-  if all_cards.len() < 7 {
+  /*if all_cards.len() < 7 {
     let mut possible_hands = Vec::<Vec<&Card>>::new();
 
     if all_cards.len() == 5 {
@@ -566,8 +607,8 @@ fn main() -> Result<(), Error> {
   let mut future_eq = flop_equity;
   if max_future_eq != 0.0 {
     future_eq = (min_future_eq+max_future_eq)*0.5;
-  }
-  println!("hand score: {}, equity: {:.2}% ({:.2}%), type: {}", flop_hand_score, flop_equity*100.0, future_eq*100.0, flop_hand_type);
+  }*/
+  println!("hand score: {}, equity: {:.2}%, type: {}", flop_hand_score, flop_equity*100.0, flop_hand_type);
 
   // now find what hands an opponent can potentially have based on community cards so far
   /*let mut community_cards = Vec::<Card>::new();

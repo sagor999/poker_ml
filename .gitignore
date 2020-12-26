@@ -8,3 +8,4 @@ card_recognizer_ml/data/checkpoint
 card_recognizer_ml/data/cp.ckpt.data-00000-of-00001
 card_recognizer_ml/data/cp.ckpt.index
 data.bin
+starting_hands.bin
