@@ -1,6 +1,8 @@
-import os
+import os, select
+import sys
 import pathlib
 import PIL
+import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 
@@ -140,67 +142,30 @@ if Training:
 else:
   model.load_weights(checkpoint_path)
 
-  img = keras.preprocessing.image.load_img(
-      '/data/test/1.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score1 = tf.nn.softmax(predictions[0])
+  while True:
+    trigger_file = pathlib.Path("/data/trigger")
+    if trigger_file.is_file():
+      trigger_file.unlink()
+      images = []
+      for i in range(7):
+        img = keras.preprocessing.image.load_img(
+          '/data/test/{}.png'.format(i+1), target_size=(img_height, img_width)
+        )
+        img_array = keras.preprocessing.image.img_to_array(img)
+        img_array = tf.expand_dims(img_array, 0) # Create a batch
+        images.append(img_array)
+      
+      images = np.vstack(images)
+      predictions = model.predict(images)
+      score1 = tf.nn.softmax(predictions[0])
+      score2 = tf.nn.softmax(predictions[1])
+      score3 = tf.nn.softmax(predictions[2])
+      score4 = tf.nn.softmax(predictions[3])
+      score5 = tf.nn.softmax(predictions[4])
+      score6 = tf.nn.softmax(predictions[5])
+      score7 = tf.nn.softmax(predictions[6])
 
-  img = keras.preprocessing.image.load_img(
-      '/data/test/2.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score2 = tf.nn.softmax(predictions[0])
-
-  img = keras.preprocessing.image.load_img(
-      '/data/test/3.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score3 = tf.nn.softmax(predictions[0])
-
-  img = keras.preprocessing.image.load_img(
-      '/data/test/4.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score4 = tf.nn.softmax(predictions[0])
-
-  img = keras.preprocessing.image.load_img(
-      '/data/test/5.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score5 = tf.nn.softmax(predictions[0])
-
-  img = keras.preprocessing.image.load_img(
-      '/data/test/6.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score6 = tf.nn.softmax(predictions[0])
-
-  img = keras.preprocessing.image.load_img(
-      '/data/test/7.png', target_size=(img_height, img_width)
-  )
-  img_array = keras.preprocessing.image.img_to_array(img)
-  img_array = tf.expand_dims(img_array, 0) # Create a batch
-  
-  predictions = model.predict(img_array)
-  score7 = tf.nn.softmax(predictions[0])
-
-  print("{} {} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)],class_names[np.argmax(score7)]))
+      print("{} {} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)],class_names[np.argmax(score7)]))
+      sys.stdout.flush()
+    else:
+      time.sleep(0.1)
