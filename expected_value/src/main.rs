@@ -322,6 +322,28 @@ fn get_best_hand_string(f: f32) -> HandRank {
   };
 }
 
+fn should_skip_hand_with_pair(hand_type: &HandRank, h: &Vec<Card>, hand: &Vec<Card>) -> bool {
+  if *hand_type == HandRank::Pair {
+    // pair should be formed using one of my hand cards
+    // so let's find that pair and compare rank to my hand cards
+    let mut should_skip = false;
+    for i in 0..h.len() {
+      for j in (i+1)..h.len() {
+        if h[i].rank == h[j].rank {
+          if h[i].rank != hand[0].rank && h[i].rank != hand[1].rank {
+            should_skip = true;
+          }
+          break;
+        }
+      }
+    }
+    if should_skip {
+      //println!("skipping pair: {:?}", h);
+      return true;
+    }
+  }
+  return false
+}
 // check if this hand contains hand cards or if it is made up from community cards only
 // logic is that if there is a pair in community cards, that doesn't help me at all
 // and so such "pair" should be skipped
@@ -398,7 +420,7 @@ fn should_skip_hand(hand_type: &str, h: &Vec<Card>, hand: &Vec<Card>) -> bool {
 }
 
 // returns tuple of: raw hand value, hand equity, type of hand
-fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>,(f32,f32)>) -> (f32, f32, HandRank) {
+fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>,(f32,f32)>) -> (f32, f32, HandRank, Vec<Card>) {
   let mut sorted_cards = Vec::<Card>::new();
   for h in my_hand {
     sorted_cards.push(*h);
@@ -407,6 +429,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
     sorted_cards.push(*h);
   }
   sorted_cards.sort();
+  let mut assembled_hand = Vec::<Card>::new();
   let (highest_value, equity) = match sorted_cards.len() {
     5 =>  {
       let highest_score;
@@ -425,6 +448,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
         highest_score = score;
         highest_eq = eq;
       }*/
+      assembled_hand = sorted_cards.clone();
       highest_score = score;
       highest_eq = eq;
     (highest_score, highest_eq)
@@ -450,13 +474,14 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
         if score > highest_score {
           highest_score = score;
           highest_eq = eq;
+          assembled_hand = new_hand.clone();
         }
       }
       (highest_score, highest_eq)
     },
     _ => panic!("unexpected cards len {} in get_best_hand", sorted_cards.len()),
   };
-  return (highest_value, equity, get_best_hand_string(highest_value))
+  return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
 fn main() -> Result<(), Error> {
@@ -523,16 +548,46 @@ fn main() -> Result<(), Error> {
   let args: Vec<String> = env::args().collect();
   //println!("args: {:?}", args);
   let mut input: String = "C8 H5 H7 D12 D6".to_string();
-  if args.len() == 2 {
+  let mut pot_str: String = "Total pot: $1.30\nMain pot: $1.10\n\n".to_string();
+  if args.len() > 1 {
     input = args[1].to_string();
+    pot_str = args[2].to_string();
   }
+
+  let mut total_pot = 0.0;
+  let mut main_pot = 0.0;
+  if pot_str.contains('$') {
+    let split_pot_str: Vec<&str> = pot_str.split('\n').collect();
+    for s in split_pot_str {
+      let semicolon = s.find(':');
+      if semicolon != None {
+        let (s1, s2) = s.split_at(semicolon.unwrap());
+        let pot_name = s1.to_lowercase();
+        if pot_name == "total pot" {
+          let (_t, am) = s2.split_at(3);
+          total_pot = am.parse::<f32>().unwrap();
+        } else if pot_name == "main pot" {
+          let (_t, am) = s2.split_at(3);
+          main_pot = am.parse::<f32>().unwrap();
+        }
+      }      
+    }
+  }
+  let call_amount = total_pot-main_pot;
+  //println!("{}, {}", total_pot, main_pot);
 
   let mut input_cards = conv_string_to_cards(&input);
 
   if input_cards.len() == 2 {
     input_cards.sort();
     let start_eq = starting_hands[&input_cards];
-    println!("hand cards: {:?}, Avg Eq: {:.2}%", input_cards, start_eq*100.0);
+    let action;
+    if start_eq < 0.5 {
+      action = "FOLD";
+    } else {
+      action = "CALL";
+    }
+    println!("hand cards: {:?}, Avg Eq: {:.2}%, Action: {}", input_cards, start_eq*100.0, action);
     return Ok(())
   }
   if input_cards.len() < 5 {
@@ -551,104 +606,46 @@ fn main() -> Result<(), Error> {
 
   println!("hand cards: {:?}", hand);
   println!("community cards: {:?}", community);
+  println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
 
   let mut all_cards = Vec::<Card>::new();
   all_cards.extend(hand.to_vec().iter());
   all_cards.extend(community.to_vec().iter());
 
-  let (_, flop_equity, flop_hand_type) = get_best_hand(&hand, &community, &combinations);
+  let (_, flop_equity, flop_hand_type, _) = get_best_hand(&hand, &community, &combinations);
 
-  /*let mut min_future_eq = 10000.0;
-  let mut max_future_eq = 0.0;
-  if all_cards.len() < 7 {
-    let mut possible_hands = Vec::<Vec<&Card>>::new();
-
-    if all_cards.len() == 5 {
-      let c4 = all_cards.iter().combinations(4);
-      let c3 = all_cards.iter().combinations(3);
-      for c in c4 {
-        possible_hands.push(c);
-      }
-      for c in c3 {
-        possible_hands.push(c);
-      }
-    } else {
-      let c4 = all_cards.iter().combinations(4);
-      for c in c4 {
-        possible_hands.push(c);
-      }
-    }
-    let mut num_of_better_hands = HashMap::new();
-    let mut num_possible_hands = 0;
-    let mut seen_hands = HashSet::new();
-    for c in possible_hands {
-      let found_hands = find_possible_hands_in_all_combinations(&c, &combinations);
-      for h in found_hands {
-        if seen_hands.contains(&h) {
-          //println!("found already seen hand: {:?}", h);
-          continue;
-        } else {
-          seen_hands.insert(h.to_vec());
-        }
-        num_possible_hands = num_possible_hands+1;
-        let (hscore, hequity) = combinations[&h];
-        if hscore > flop_hand_score {
-          let hand_type = get_best_hand_string(hscore).clone();
-          // i need to exclude hands that improve community cards. as that doesn't help me at all. 
-          // so lets filter out hands that do not contain my hand cards at all.
-          if find_common_cards_in_pack_no_ref(&hand, &h) == 0 {
-            continue;
-          }
-          if hequity > max_future_eq {
-            max_future_eq = hequity;
-          }
-          if hequity < min_future_eq {
-            min_future_eq = hequity;
-          }
-
-          if should_skip_hand(&hand_type, &h, &hand) {
-            continue;
-          }
-          if hand_type == "0. High card" {
-            // those will never improve my original hand, so we can skip all of them safely
-            continue;
-          }
-
-          if !num_of_better_hands.contains_key(&hand_type) {
-            num_of_better_hands.insert(hand_type.clone(), 1);
-          } else {
-            let next_num = num_of_better_hands[&hand_type]+1;
-            num_of_better_hands.remove(&hand_type);
-            num_of_better_hands.insert(hand_type.clone(), next_num);
-          }
-
-          //println!("Better possible hand: {:?} - {}", h, hand_type);  
-        }
-      }
-    }
-    //println!("Potential future equity if hand improves: min: {}, max: {}, mean: {}", min_future_eq, max_future_eq, (min_future_eq+max_future_eq)*0.5);
-    //println!("num hands: {}", num_possible_hands);
-    let mut sorted_keys: Vec<&String> = num_of_better_hands.keys().collect();
-    sorted_keys.sort();
-    for hand_type in sorted_keys {
-      println!("Num of better hands: {}, {}, {}%", hand_type, num_of_better_hands[hand_type], (num_of_better_hands[hand_type] as f32/num_possible_hands as f32)*100.0);
-    }
-  }
-  let mut future_eq = flop_equity;
-  if max_future_eq != 0.0 {
-    future_eq = (min_future_eq+max_future_eq)*0.5;
-  }*/
-
-  // now find what hands an opponent can potentially have based on community cards so far
-  let mut community_cards = Vec::<Card>::new();
-  community_cards.extend(community.to_vec().iter());
-
+  let community_cards = community.clone();
+  let num_comm_cards = community_cards.len();
+  // lets find cards that can improve our current hand
   let mut remaining_deck = card_deck.to_vec();
   for i in 0..community_cards.len() {
     remaining_deck.retain(|&x| x != community_cards[i]);
   }
   remaining_deck.retain(|&x| x != hand[0]);
   remaining_deck.retain(|&x| x != hand[1]);
+  let mut improved_hands_hash_map = HashMap::new();
+  if num_comm_cards == 3 || num_comm_cards == 4 {
+    for i in 0..remaining_deck.len() {
+      let mut new_comm_cards = community_cards.clone();
+      new_comm_cards.push(remaining_deck[i]);
+      let (_, _, htype, assembled_hand) = get_best_hand(&hand, &new_comm_cards, &combinations);
+      if should_skip_hand_with_pair(&htype, &assembled_hand, &hand) {
+        continue;
+      }
+      if htype > flop_hand_type {
+        *improved_hands_hash_map.entry(htype).or_insert(1) += 1;
+      }
+    }    
+  }
+
+  // now find what hands an opponent can potentially have based on community cards so far
+  let mut remaining_deck = card_deck.to_vec();
+  for i in 0..community_cards.len() {
+    remaining_deck.retain(|&x| x != community_cards[i]);
+  }
+  remaining_deck.retain(|&x| x != hand[0]);
+  remaining_deck.retain(|&x| x != hand[1]);
+  let num_cards_in_deck_left = remaining_deck.len();
 
   let mut num_hands = 0;
   let mut total_eq = 0.0;
@@ -664,7 +661,7 @@ fn main() -> Result<(), Error> {
       if starting_hand_eq < 0.48 {
         continue; 
       }
-      let (_, eq, htype) = get_best_hand(&h, &community_cards, &combinations);
+      let (_, eq, htype, _) = get_best_hand(&h, &community_cards, &combinations);
       if eq < min_eq {
         min_eq = eq;
       }
@@ -687,12 +684,38 @@ fn main() -> Result<(), Error> {
   real_my_hand_eq = real_my_hand_eq/range_eq;
   // show my hands relative strength to any opponent's hand. essentially it is my equity
   println!("RelStr: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
+  let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
+  sorted_keys.sort();
+  for hand_type in sorted_keys {
+    let s = hand_type.to_string();
+    let num_outs = improved_hands_hash_map[hand_type];
+    let perc = num_outs as f32/(num_cards_in_deck_left-num_outs) as f32;
+    // todo: to make proper call calc need to add info about how many players are betting
+    let new_total_pot = total_pot+call_amount; // this is if I add my call to the pot
+    let pot_perc;
+    if new_total_pot > 0.0 && call_amount > 0.0 {
+      pot_perc = call_amount / new_total_pot;
+    } else {
+      pot_perc = 0.0;
+    }
+    let action;
+    if perc > pot_perc {
+      action = "CALL";
+    } else {
+      action = "BAD CALL";
+    }
+    println!("{:<20}:{:.1}%  pot odds: {:.1}%, action: {}", s, perc*100.0, pot_perc*100.0, action);
+  }
+
   //println!("Oppont: {:.2}%", oppon_eq*100.0);
   //println!("{:.3}-{:.3}", min_eq, max_eq);
-  println!("Opponent possible hands:");
+  println!("Opponent hand range:");
   let mut sorted_keys: Vec<&HandRank> = opponent_hands_hash_map.keys().collect();
   sorted_keys.sort();
   for hand_type in sorted_keys {
+    if *hand_type == HandRank::HighCard {
+      continue;
+    }
     let s = hand_type.to_string();
     println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/num_hands as f32)*100.0);
   }
