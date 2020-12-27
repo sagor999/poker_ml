@@ -5,9 +5,6 @@ training:
 test:
 	docker run --runtime=nvidia -it -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml/data:/data -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml:/src --rm paveltumik/tf-gpu:latest python /src/main.py
 
-test_ocr:
-	docker run --runtime=nvidia -it -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml/data:/data -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml:/src --rm paveltumik/tf-gpu:latest python /src/ocr.py
-
 run:
 	docker run --name card_ml --runtime=nvidia -t -d -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml/data:/data -v /home/pavel/nvme/GitHub/poker_ml/card_recognizer_ml:/src --rm paveltumik/tf-gpu:latest bash
 
