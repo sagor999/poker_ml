@@ -17,3 +17,9 @@ Also, another concern is hand equity. Have some lingering doubts about how good 
 It is very logarithmic in nature. Since majority of hands are trash indeed.
 Don't know. Don't have good thought about this yet. Just something that lingers in the back of my mind.
 
+
+
+split card recognizer into two projects.
+one for training.
+another one for actual ML work (since I have to do all ML stuff in same container).
+so makes sense to put all python scripts into same folder.
