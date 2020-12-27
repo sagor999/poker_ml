@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Error, ErrorKind, Read};
 use std::str::FromStr;
@@ -11,6 +14,7 @@ use serde::{Serialize, Deserialize};
 use std::path::Path;
 use std::env;
 use std::time::{Duration, Instant};
+use std::cmp;
 
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -202,6 +206,37 @@ impl fmt::Display for HandData {
   }
 }
 
+#[derive(Hash, PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
+enum HandRank {
+  HighCard = 1,
+  Pair = 2,
+  TwoPairs = 3,
+  ThreeOfAKind = 4,
+  Straight = 5,
+  Flush = 6,
+  FullHouse = 7,
+  FourOfAKind = 8,
+  StraightFlush = 9,
+  RoyalFlush = 10,
+}
+
+impl fmt::Display for HandRank {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      HandRank::HighCard      => write!(f, "0/9 High card"),
+      HandRank::Pair          => write!(f, "1/9 Pair"),
+      HandRank::TwoPairs      => write!(f, "2/9 Two Pairs"),
+      HandRank::ThreeOfAKind  => write!(f, "3/9 Three of a Kind"),
+      HandRank::Straight      => write!(f, "4/9 Straight"),
+      HandRank::Flush         => write!(f, "5/9 Flush"),
+      HandRank::FullHouse     => write!(f, "6/9 Full House"),
+      HandRank::FourOfAKind   => write!(f, "7/9 Four of a Kind"),
+      HandRank::StraightFlush => write!(f, "8/9 Straight Flush"),
+      HandRank::RoyalFlush    => write!(f, "9/9 Royal Flush"),
+    }
+  }
+}
+
 fn read<R: Read>(io: R) -> Result<Vec<HandData>, Error> {
   let br = BufReader::new(io);
   br.lines()
@@ -271,21 +306,20 @@ fn find_possible_hands_in_all_combinations_no_ref(cards: &Vec<Card>, combination
 }
 
 #[allow(illegal_floating_point_literal_pattern)]
-fn get_best_hand_string(f: f32) -> String {
-  let res = match f {
-    0.0..=99.999 =>    "0/9 High card",
-    100.0..=199.999 => "1/9 Pair",
-    200.0..=299.999 => "2/9 Two Pairs",
-    300.0..=399.999 => "3/9 Three of a Kind",
-    400.0..=499.999 => "4/9 Straight",
-    500.0..=599.999 => "5/9 Flush",
-    600.0..=699.999 => "6/9 Full House",
-    700.0..=799.999 => "7/9 Four of a Kind",
-    800.0..=899.999 => "8/9 Straight Flush",
-    900.0..=999.999 => "9/9 Royal Flush",
+fn get_best_hand_string(f: f32) -> HandRank {
+  return match f {
+    0.0..=99.999 =>    HandRank::HighCard,
+    100.0..=199.999 => HandRank::Pair,
+    200.0..=299.999 => HandRank::TwoPairs,
+    300.0..=399.999 => HandRank::ThreeOfAKind,
+    400.0..=499.999 => HandRank::Straight,
+    500.0..=599.999 => HandRank::Flush,
+    600.0..=699.999 => HandRank::FullHouse,
+    700.0..=799.999 => HandRank::FourOfAKind,
+    800.0..=899.999 => HandRank::StraightFlush,
+    900.0..=999.999 => HandRank::RoyalFlush,
     _ => panic!("unknown range for {}", f),
   };
-  return res.to_string()
 }
 
 // check if this hand contains hand cards or if it is made up from community cards only
@@ -364,7 +398,7 @@ fn should_skip_hand(hand_type: &str, h: &Vec<Card>, hand: &Vec<Card>) -> bool {
 }
 
 // returns tuple of: raw hand value, hand equity, type of hand
-fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>,(f32,f32)>) -> (f32, f32, String) {
+fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>,(f32,f32)>) -> (f32, f32, HandRank) {
   let mut sorted_cards = Vec::<Card>::new();
   for h in my_hand {
     sorted_cards.push(*h);
@@ -378,8 +412,8 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
       let highest_score;
       let highest_eq;
       let (score, eq) = combinations[&sorted_cards];
-      let hand_type = get_best_hand_string(score);
-      /*if should_skip_hand(&hand_type, &sorted_cards, &my_hand) && (hand_type == "1/9 Pair" || hand_type == "3/9 Three of a Kind") {
+      /*let hand_type = get_best_hand_string(score);
+      if should_skip_hand(&hand_type, &sorted_cards, &my_hand) && (hand_type == "1/9 Pair" || hand_type == "3/9 Three of a Kind") {
         // there are several special cases which we want to disregard on the flop
         // if there is a pair in the flop, or if there is 3 of a kind in the flop
         // that's the only two combinations that can happen that will not include
@@ -409,7 +443,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
           continue;
         }
         let (score, eq) = combinations[&new_hand];
-        let hand_type = get_best_hand_string(score);
+        //let hand_type = get_best_hand_string(score);
         //if should_skip_hand(&hand_type, &new_hand, &my_hand) {
         //  continue;
         //}
@@ -461,7 +495,7 @@ fn main() -> Result<(), Error> {
         let mut total_eq = 0.0;
         let num_hands = found_hands.len() as f32;
         for h in found_hands {
-          let (hscore, hequity) = combinations[&h];
+          let (_, hequity) = combinations[&h];
           total_eq = total_eq + hequity;
         }
         let aver_eq = total_eq/num_hands;
@@ -604,7 +638,6 @@ fn main() -> Result<(), Error> {
   if max_future_eq != 0.0 {
     future_eq = (min_future_eq+max_future_eq)*0.5;
   }*/
-  println!("Equity: {:.2}%, Type: {}", flop_equity*100.0, flop_hand_type);
 
   // now find what hands an opponent can potentially have based on community cards so far
   let mut community_cards = Vec::<Card>::new();
@@ -619,22 +652,50 @@ fn main() -> Result<(), Error> {
 
   let mut num_hands = 0;
   let mut total_eq = 0.0;
+  let mut min_eq = 1000.0;
+  let mut max_eq = 0.0;
+  let mut opponent_hands_hash_map = HashMap::new();
   for i in 0..remaining_deck.len() {
     for j in (i+1)..remaining_deck.len() {
       let mut h = vec![remaining_deck[i],remaining_deck[j]];
       h.sort();
-      let hand_eq = starting_hands[&h];
-      // skip all really crappy hands that majority of players never play
-      if hand_eq < 0.48 {
+      // skip all really crappy hands that majority of players 'should' never play
+      let starting_hand_eq = starting_hands[&h];
+      if starting_hand_eq < 0.48 {
         continue; 
       }
-      let (score, eq, htype) = get_best_hand(&h, &community_cards, &combinations);
+      let (_, eq, htype) = get_best_hand(&h, &community_cards, &combinations);
+      if eq < min_eq {
+        min_eq = eq;
+      }
+      if eq > max_eq {
+        max_eq = eq;
+      }
       total_eq = total_eq+eq;
       num_hands = num_hands+1;
+      *opponent_hands_hash_map.entry(htype).or_insert(1) += 1;
     }
   }
-  let oppon_eq = total_eq/num_hands as f32;
-  println!("Oppont: {:.2}%", oppon_eq*100.0);
+  //let oppon_eq = total_eq/num_hands as f32;
+
+  // now calculate 'real' hand equity based on potential range of opponent hands
+  let range_eq = max_eq-min_eq;
+  let mut real_my_hand_eq = flop_equity-min_eq;
+  if real_my_hand_eq < 0.0 {
+    real_my_hand_eq = 0.0;
+  }
+  real_my_hand_eq = real_my_hand_eq/range_eq;
+  // show my hands relative strength to any opponent's hand. essentially it is my equity
+  println!("RelStr: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
+  //println!("Oppont: {:.2}%", oppon_eq*100.0);
+  //println!("{:.3}-{:.3}", min_eq, max_eq);
+  println!("Opponent possible hands:");
+  let mut sorted_keys: Vec<&HandRank> = opponent_hands_hash_map.keys().collect();
+  sorted_keys.sort();
+  for hand_type in sorted_keys {
+    let s = hand_type.to_string();
+    println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/num_hands as f32)*100.0);
+  }
 
   //let duration_main = start_main_ts.elapsed();
   //println!("Main duration is: {:?}", duration_main);
