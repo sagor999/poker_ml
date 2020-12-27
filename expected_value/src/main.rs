@@ -10,6 +10,8 @@ use std::cmp::Ordering;
 use serde::{Serialize, Deserialize};
 use std::path::Path;
 use std::env;
+use std::time::{Duration, Instant};
+
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 enum CardSuit {
@@ -424,6 +426,8 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
 }
 
 fn main() -> Result<(), Error> {
+  //let start_init_ts = Instant::now();
+
   let card_deck = conv_string_to_cards("2c 3c 4c 5c 6c 7c 8c 9c Tc Jc Qc Kc Ac 2h 3h 4h 5h 6h 7h 8h 9h Th Jh Qh Kh Ah 2s 3s 4s 5s 6s 7s 8s 9s Ts Js Qs Ks As 2d 3d 4d 5d 6d 7d 8d 9d Td Jd Qd Kd Ad");
 
   let mut combinations = HashMap::new();
@@ -471,6 +475,10 @@ fn main() -> Result<(), Error> {
     bincode::serialize_into(&mut f, &starting_hands).unwrap();
   }
 
+  //let duration_init = start_init_ts.elapsed();
+  //println!("Init duration is: {:?}", duration_init);
+  //let start_main_ts = Instant::now();
+
   /*for k in starting_hands.keys() {
     let v = starting_hands[k];
     if v < 0.48 {
@@ -502,6 +510,7 @@ fn main() -> Result<(), Error> {
   let mut community = Vec::<Card>::new();
   hand.push(input_cards[0]);
   hand.push(input_cards[1]);
+  hand.sort();
   for i in 2..input_cards.len() {
     community.push(input_cards[i]);
   }
@@ -625,7 +634,10 @@ fn main() -> Result<(), Error> {
     }
   }
   let oppon_eq = total_eq/num_hands as f32;
-  println!("Opponent avg equity: {:.2}%", oppon_eq*100.0);
- 
+  println!("Oppont: {:.2}%", oppon_eq*100.0);
+
+  //let duration_main = start_main_ts.elapsed();
+  //println!("Main duration is: {:?}", duration_main);
+
   Ok(())
 }
