@@ -13,13 +13,13 @@ card_h = 100
 pot_w = 160
 pot_h = 74
 
-hand1 = (1962,599)
-hand2 = (2015,599)
-flop1 = (1815,437)
-flop2 = (1898,437)
-flop3 = (1977,437)
-turn1 = (2064,437)
-rive1 = (2150,437)
+hand1 = (1964,597)
+hand2 = (2016,597)
+flop1 = (1812,434)
+flop2 = (1896,434)
+flop3 = (1980,434)
+turn1 = (2063,434)
+rive1 = (2144,434)
 pot   = (1935,356)
 
 scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h), 
@@ -28,16 +28,19 @@ scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h),
               (flop2[0], flop2[1], flop2[0]+card_w, flop2[1]+card_h), 
               (flop3[0], flop3[1], flop3[0]+card_w, flop3[1]+card_h), 
               (turn1[0], turn1[1], turn1[0]+card_w, turn1[1]+card_h), 
-              (rive1[0], rive1[1], rive1[0]+card_w, rive1[1]+card_h),
-              (pot[0], pot[1], pot[0]+pot_w, pot[1]+pot_h)]
+              (rive1[0], rive1[1], rive1[0]+card_w, rive1[1]+card_h)]
+              #(pot[0], pot[1], pot[0]+pot_w, pot[1]+pot_h)]
 prev_scans = []
 
 for i in range(len(scan_areas)):
   prev_scans.append(ImageGrab.grab(bbox=scan_areas[i]))
 
 card_ml_stream = os.popen('docker exec card_ml python /src/main.py')
-ocr_stream = os.popen('docker exec ocr python3 /src/ocr.py')
+#ocr_stream = os.popen('docker exec ocr python3 /src/ocr.py')
+ev_stream = os.popen('expected_value/target/release/poker_ev loop')
 
+prev_ml_output = ""
+prev_ocr_output = ""
 while (True):
   changed = False
 
@@ -65,21 +68,36 @@ while (True):
     card_ml_output = card_ml_output.rstrip('\n')
     #print("ML output: ", card_ml_output)
 
-    os.system("touch ocr/data/trigger")
+    #os.system("touch ocr/data/trigger")
     #print("Touched trigger. Waiting for OCR")
     ocr_output = ""
-    while True:
-      line = ocr_stream.readline()
-      if line.strip() == "END" or line == "":
-        break
-      ocr_output += line
+    #while True:
+    #  line = ocr_stream.readline()
+    #  if line.strip() == "END" or line == "":
+    #    break
+    #  ocr_output += line
     
     #print("OCR: ", ocr_output)
     #print("end ocr")
 
-    poker_ev_stream = os.popen("expected_value/target/release/poker_ev '{}' '{}'".format(card_ml_output, ocr_output))
-    poker_ev_output = poker_ev_stream.read()
-    print(poker_ev_output)
+    if prev_ml_output != card_ml_output or prev_ocr_output != ocr_output:
+      prev_ml_output = card_ml_output
+      prev_ocr_output = ocr_output
+      with open("expected_value/data/input_hand", "w") as input_hand_file:
+        print("{}".format(card_ml_output), file=input_hand_file)
+      with open("expected_value/data/input_pot", "w") as input_pot_file:
+        print("{}".format(ocr_output), file=input_pot_file)
+      print("----------------------------------")
+      os.system("touch expected_value/data/trigger")
+      while True:
+        line = ev_stream.readline()
+        if line.strip() == "END" or line == "":
+          break
+        print(line.strip())
+        if 'Detected duplicate card' in line:
+          epoch_time = int(time.time())
+          os.system("mkdir card_recognizer_ml/data/add_to_train/{}".format(epoch_time))
+          os.system("cp card_recognizer_ml/data/test/* card_recognizer_ml/data/add_to_train/{}".format(epoch_time))
   else:
     #print("Sleeping before next run")
     time.sleep(0.1) 

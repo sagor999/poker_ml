@@ -23,3 +23,11 @@ split card recognizer into two projects.
 one for training.
 another one for actual ML work (since I have to do all ML stuff in same container).
 so makes sense to put all python scripts into same folder.
+
+
+
+ML idea:
+run game iteration, but without any betting. 
+just based on cards that come. let ML predict if it should fold or call?
+or maybe add fixed betting as a loss thing, otherwise ML will keep waiting until all cards to show up.
+output from ML should be some sort of hand strength. if should call or fold. 
