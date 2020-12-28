@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Error, ErrorKind, Read};
 use std::str::FromStr;
@@ -15,7 +16,7 @@ use std::path::Path;
 use std::env;
 use std::time::{Duration, Instant};
 use std::cmp;
-
+use std::{thread};
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 enum CardSuit {
@@ -322,101 +323,66 @@ fn get_best_hand_string(f: f32) -> HandRank {
   };
 }
 
-fn should_skip_hand_with_pair(hand_type: &HandRank, h: &Vec<Card>, hand: &Vec<Card>) -> bool {
-  if *hand_type == HandRank::Pair {
-    // pair should be formed using one of my hand cards
-    // so let's find that pair and compare rank to my hand cards
-    let mut should_skip = false;
-    for i in 0..h.len() {
-      for j in (i+1)..h.len() {
-        if h[i].rank == h[j].rank {
-          if h[i].rank != hand[0].rank && h[i].rank != hand[1].rank {
-            should_skip = true;
-          }
-          break;
-        }
-      }
-    }
-    if should_skip {
-      //println!("skipping pair: {:?}", h);
-      return true;
-    }
-  }
-  return false
-}
-// check if this hand contains hand cards or if it is made up from community cards only
-// logic is that if there is a pair in community cards, that doesn't help me at all
-// and so such "pair" should be skipped
-fn should_skip_hand(hand_type: &str, h: &Vec<Card>, hand: &Vec<Card>) -> bool {
-  if hand_type == "1/9 Pair" {
-    // pair should be formed using one of my hand cards
-    // so let's find that pair and compare rank to my hand cards
-    let mut should_skip = false;
-    for i in 0..h.len() {
-      for j in (i+1)..h.len() {
-        if h[i].rank == h[j].rank {
-          if h[i].rank != hand[0].rank && h[i].rank != hand[1].rank {
-            should_skip = true;
-          }
-          break;
-        }
-      }
-    }
-    if should_skip {
-      //println!("skipping pair: {:?}", h);
-      return true;
-    }
-  }
-  if hand_type == "2/9 Two Pairs" {
-    // find both pairs
-    let mut should_skip = false;
-    // find first pair rank
-    let mut first_pair_rank = 0;
-    for i in 0..h.len() {
-      for j in (i+1)..h.len() {
-        if h[i].rank == h[j].rank {
-          first_pair_rank = h[i].rank;
-          break;
-        }
-      }
-    }
-    // find second pair now
-    for i in 0..h.len() {
-      for j in (i+1)..h.len() {
-        if h[i].rank == h[j].rank && h[i].rank != first_pair_rank {
-          if !((h[i].rank == hand[0].rank || h[i].rank == hand[1].rank) && (first_pair_rank == hand[0].rank || first_pair_rank == hand[1].rank)) {
-            should_skip = true;
-          }
-          break;
-        }
-      }
-    }          
-    if should_skip {
-      //println!("skipping two pair: {:?}", h);
-      return true;
-    }
-  }
-  if hand_type == "3/9 Three of a Kind" {
-    let mut should_skip = false;
-    for i in 0..h.len() {
-      for j in (i+1)..h.len() {
-        for k in (j+1)..h.len() {
-          if h[i].rank == h[j].rank && h[i].rank == h[k].rank {
-            if h[i].rank != hand[0].rank && h[i].rank != hand[1].rank {
-              should_skip = true;
-            }
-            break;
-          }
-        }
-      }
-    }
-    if should_skip {
-      //println!("skipping 3 of a kind: {:?}", h);
-      return true;
-    }
-  }  
+fn is_hand_part_of_made_up_hand(hand: &Vec<Card>, hand_rank: &HandRank, combination: &Vec<Card>) -> bool {
+  let mut community_cards = combination.clone();
+  community_cards.retain(|&x| x != hand[0]);
+  community_cards.retain(|&x| x != hand[1]);
 
-  return false
+  return match hand_rank {
+    HandRank::HighCard => {
+      true
+    },
+    HandRank::Pair => {
+      for i in 0..hand.len() {
+        for j in 0..community_cards.len() {
+          if hand[i].rank == community_cards[j].rank {
+            return true
+          }
+        }
+      }
+      false
+    },
+    HandRank::TwoPairs => {
+      let mut num_matched = 0;
+      for i in 0..hand.len() {
+        for j in 0..community_cards.len() {
+          if hand[i].rank == community_cards[j].rank {
+            num_matched = num_matched+1;
+          }
+        }
+      }
+      num_matched == 2 // Kd Ad vs 7h 7d Ah <- will skip this case, intentionally
+    },
+    HandRank::ThreeOfAKind => {
+      let mut num_matched = 0;
+      for i in 0..hand.len() {
+        for j in 0..community_cards.len() {
+          if hand[i].rank == community_cards[j].rank {
+            num_matched = num_matched+1;
+          }
+        }
+      }
+      num_matched == 2 // 2 is correct here. 2,2 vs 2,5,6. or 2,3 vs 2,2,6
+    },
+    HandRank::Straight => {
+      true
+    },
+    HandRank::Flush => {
+      true
+    },
+    HandRank::FullHouse => {
+      true
+    },
+    HandRank::FourOfAKind => {
+      true
+    },
+    HandRank::StraightFlush => {
+      true
+    },
+    HandRank::RoyalFlush => {
+      true
+    },
+  }
 }
 
 // returns tuple of: raw hand value, hand equity, type of hand
@@ -435,19 +401,6 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
       let highest_score;
       let highest_eq;
       let (score, eq) = combinations[&sorted_cards];
-      /*let hand_type = get_best_hand_string(score);
-      if should_skip_hand(&hand_type, &sorted_cards, &my_hand) && (hand_type == "1/9 Pair" || hand_type == "3/9 Three of a Kind") {
-        // there are several special cases which we want to disregard on the flop
-        // if there is a pair in the flop, or if there is 3 of a kind in the flop
-        // that's the only two combinations that can happen that will not include
-        // any of my hand cards
-        // so if this happens, artificially downgrade the hand
-        highest_score = 7.0;
-        highest_eq = 0.10;
-      } else {
-        highest_score = score;
-        highest_eq = eq;
-      }*/
       assembled_hand = sorted_cards.clone();
       highest_score = score;
       highest_eq = eq;
@@ -467,10 +420,6 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
           continue;
         }
         let (score, eq) = combinations[&new_hand];
-        //let hand_type = get_best_hand_string(score);
-        //if should_skip_hand(&hand_type, &new_hand, &my_hand) {
-        //  continue;
-        //}
         if score > highest_score {
           highest_score = score;
           highest_eq = eq;
@@ -484,76 +433,8 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
   return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
-fn main() -> Result<(), Error> {
-  //let start_init_ts = Instant::now();
-
-  let card_deck = conv_string_to_cards("2c 3c 4c 5c 6c 7c 8c 9c Tc Jc Qc Kc Ac 2h 3h 4h 5h 6h 7h 8h 9h Th Jh Qh Kh Ah 2s 3s 4s 5s 6s 7s 8s 9s Ts Js Qs Ks As 2d 3d 4d 5d 6d 7d 8d 9d Td Jd Qd Kd Ad");
-
-  let mut combinations = HashMap::new();
-  let mut starting_hands = HashMap::new();
-  if Path::new("/home/pavel/nvme/GitHub/poker_ml/data.bin").exists() {
-    let f = BufReader::new(File::open("/home/pavel/nvme/GitHub/poker_ml/data.bin").unwrap());
-    combinations = bincode::deserialize_from(f).unwrap();
-  } else {
-    let vec = read(File::open("/home/pavel/nvme/GitHub/poker_ml/expected_value/hands.csv")?)?;
-    for i in 0..vec.len() {
-      let v = &vec[i];
-      let equity = i as f32/vec.len() as f32;
-      //println!("{}: {}, {}", i, v.value, equity);
-      // key is hand set. value is (raw value of the card, hand equity as chance to win with that hand)
-      combinations.insert(v.cards.to_vec(), (v.value, equity));
-    }
-  
-    let mut f = BufWriter::new(File::create("~/nvme/GitHub/poker_ml/data.bin").unwrap());
-    bincode::serialize_into(&mut f, &combinations).unwrap();
-  }
-
-  if Path::new("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").exists() {
-    let f = BufReader::new(File::open("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").unwrap());
-    starting_hands = bincode::deserialize_from(f).unwrap();
-  } else {
-    for i in 0..card_deck.len() {
-      for j in (i+1)..card_deck.len() {
-        let mut hand = vec![card_deck[i], card_deck[j]];
-        hand.sort();
-        let found_hands = find_possible_hands_in_all_combinations_no_ref(&hand, &combinations);
-        let mut total_eq = 0.0;
-        let num_hands = found_hands.len() as f32;
-        for h in found_hands {
-          let (_, hequity) = combinations[&h];
-          total_eq = total_eq + hequity;
-        }
-        let aver_eq = total_eq/num_hands;
-        println!("starting hand: {:?} - {:.2}%", hand, aver_eq*100.0);
-
-        starting_hands.insert(hand, aver_eq);
-      }
-    }
-
-    let mut f = BufWriter::new(File::create("/home/pavel/nvme/GitHub/poker_ml/starting_hands.bin").unwrap());
-    bincode::serialize_into(&mut f, &starting_hands).unwrap();
-  }
-
-  //let duration_init = start_init_ts.elapsed();
-  //println!("Init duration is: {:?}", duration_init);
+fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>) {
   //let start_main_ts = Instant::now();
-
-  /*for k in starting_hands.keys() {
-    let v = starting_hands[k];
-    if v < 0.48 {
-      println!("{:?}", k);
-    }
-  }*/
-
-  let args: Vec<String> = env::args().collect();
-  //println!("args: {:?}", args);
-  let mut input: String = "C8 H5 H7 D12 D6".to_string();
-  let mut pot_str: String = "Total pot: $1.30\nMain pot: $1.10\n\n".to_string();
-  if args.len() > 1 {
-    input = args[1].to_string();
-    pot_str = args[2].to_string();
-  }
-
   let mut total_pot = 0.0;
   let mut main_pot = 0.0;
   if pot_str.contains('$') {
@@ -578,21 +459,36 @@ fn main() -> Result<(), Error> {
 
   let mut input_cards = conv_string_to_cards(&input);
 
+  // check that input cards don't have duplicates in case if ML messed up recognizing cards
+  let mut has_duplicate_cards = false;
+  for i in 0..input_cards.len() {
+    for j in (i+1)..input_cards.len() {
+      if input_cards[i] == input_cards[j] {
+        has_duplicate_cards = true;
+        break;
+      }
+    }
+  }
+  if has_duplicate_cards {
+    println!("Detected duplicate card in input: {:?}", input_cards);
+    return
+  }
+
   if input_cards.len() == 2 {
     input_cards.sort();
-    let start_eq = starting_hands[&input_cards];
-    let action;
+    let (_, avg_eq, _) = starting_hands[&input_cards];
+    /*let action;
     if start_eq < 0.5 {
       action = "FOLD";
     } else {
       action = "CALL";
-    }
-    println!("hand cards: {:?}, Avg Eq: {:.2}%, Action: {}", input_cards, start_eq*100.0, action);
-    return Ok(())
+    }*/
+    println!("hand cards: {:?}, Eq: {:.2}%", input_cards, avg_eq*100.0);
+    return
   }
   if input_cards.len() < 5 {
     println!("not enough cards, only got: {:?}", input_cards);
-    return Ok(())
+    return
   }
 
   let mut hand = Vec::<Card>::new();
@@ -606,7 +502,7 @@ fn main() -> Result<(), Error> {
 
   println!("hand cards: {:?}", hand);
   println!("community cards: {:?}", community);
-  println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
+  //println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
 
   let mut all_cards = Vec::<Card>::new();
   all_cards.extend(hand.to_vec().iter());
@@ -629,7 +525,7 @@ fn main() -> Result<(), Error> {
       let mut new_comm_cards = community_cards.clone();
       new_comm_cards.push(remaining_deck[i]);
       let (_, _, htype, assembled_hand) = get_best_hand(&hand, &new_comm_cards, &combinations);
-      if should_skip_hand_with_pair(&htype, &assembled_hand, &hand) {
+      if is_hand_part_of_made_up_hand(&hand, &htype, &assembled_hand) == false {
         continue;
       }
       if htype > flop_hand_type {
@@ -657,8 +553,8 @@ fn main() -> Result<(), Error> {
       let mut h = vec![remaining_deck[i],remaining_deck[j]];
       h.sort();
       // skip all really crappy hands that majority of players 'should' never play
-      let starting_hand_eq = starting_hands[&h];
-      if starting_hand_eq < 0.48 {
+      let (_, avg_eq, _) = starting_hands[&h];
+      if avg_eq < 0.35 {
         continue; 
       }
       let (_, eq, htype, _) = get_best_hand(&h, &community_cards, &combinations);
@@ -683,7 +579,7 @@ fn main() -> Result<(), Error> {
   }
   real_my_hand_eq = real_my_hand_eq/range_eq;
   // show my hands relative strength to any opponent's hand. essentially it is my equity
-  println!("RelStr: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
+  println!("Hand Equity: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
   let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
   sorted_keys.sort();
   for hand_type in sorted_keys {
@@ -726,6 +622,127 @@ fn main() -> Result<(), Error> {
 
   //let duration_main = start_main_ts.elapsed();
   //println!("Main duration is: {:?}", duration_main);
+}
+
+fn main() -> Result<(), Error> {
+  //let start_init_ts = Instant::now();
+  let combinations_path: String =   "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/combinations.bin".to_string();
+  let starting_hands_path: String = "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/starting_hands.bin".to_string();
+  let hands_csv_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/hands.csv".to_string();
+  let trigger_path: String =        "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/trigger".to_string();
+  let input_hand_path: String =     "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_hand".to_string();
+  let input_pot_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_pot".to_string();
+
+  let card_deck = conv_string_to_cards("2c 3c 4c 5c 6c 7c 8c 9c Tc Jc Qc Kc Ac 2h 3h 4h 5h 6h 7h 8h 9h Th Jh Qh Kh Ah 2s 3s 4s 5s 6s 7s 8s 9s Ts Js Qs Ks As 2d 3d 4d 5d 6d 7d 8d 9d Td Jd Qd Kd Ad");
+
+  let mut combinations = HashMap::new();
+  let mut starting_hands = HashMap::new();
+  if Path::new(&combinations_path).exists() {
+    let f = BufReader::new(File::open(combinations_path).unwrap());
+    combinations = bincode::deserialize_from(f).unwrap();
+  } else {
+    println!("Generating combinations...");
+    let vec = read(File::open(hands_csv_path)?)?;
+    for i in 0..vec.len() {
+      let v = &vec[i];
+      let equity = i as f32/vec.len() as f32;
+      //println!("{}: {}, {}", i, v.value, equity);
+      // key is hand set. value is (raw value of the card, hand equity as chance to win with that hand)
+      combinations.insert(v.cards.to_vec(), (v.value, equity));
+    }
+  
+    let mut f = BufWriter::new(File::create(combinations_path).unwrap());
+    bincode::serialize_into(&mut f, &combinations).unwrap();
+  }
+
+  if Path::new(&starting_hands_path).exists() {
+    let f = BufReader::new(File::open(starting_hands_path).unwrap());
+    starting_hands = bincode::deserialize_from(f).unwrap();
+  } else {
+    println!("Generating starting hands...");
+    for i in 0..card_deck.len() {
+      for j in (i+1)..card_deck.len() {
+        let mut hand = vec![card_deck[i], card_deck[j]];
+        hand.sort();
+        let found_hands = find_possible_hands_in_all_combinations_no_ref(&hand, &combinations);
+        let mut total_eq = 0.0;
+        let mut min_eq = 100.0;
+        let mut max_eq = 0.0;
+        let mut num_hands = 0;
+        for h in found_hands {
+          let (hscore, hequity) = combinations[&h];
+          let hand_rank = get_best_hand_string(hscore);
+          // check if hand is actually part of winning hand
+          if is_hand_part_of_made_up_hand(&hand, &hand_rank, &h) {
+            num_hands = num_hands+1;
+            total_eq = total_eq + hequity;
+            if hequity < min_eq {
+              min_eq = hequity;
+            }
+            if hequity > max_eq {
+              max_eq = hequity;
+            }
+          } else {
+            //println!("skipping incorrect hand: {:?}, {:?}, {}", hand, h, hand_rank);
+          }
+        }
+        let aver_eq = total_eq/num_hands as f32;
+        //println!("starting hand: {:?} - {:.2}%", hand, aver_eq*100.0);
+
+        starting_hands.insert(hand, (min_eq, aver_eq, max_eq));
+      }
+    }
+
+    let mut f = BufWriter::new(File::create(starting_hands_path).unwrap());
+    bincode::serialize_into(&mut f, &starting_hands).unwrap();
+  }
+
+  /*let mut hands: Vec<&Vec<Card>> = starting_hands.keys().collect();
+  hands.sort();
+  for h in hands {
+    let (min_eq, _, _) = starting_hands[h];
+    if min_eq > 0.15 {
+      println!("{:?} - {:.2}%", h, min_eq*100.0);
+    }
+  }*/
+
+  //let duration_init = start_init_ts.elapsed();
+  //println!("Init duration is: {:?}", duration_init);
+
+  let args: Vec<String> = env::args().collect();
+  if args.len() < 2 {
+    println!("Usage: poker_ev mode input_hand pot");
+    return Ok(())
+  }
+  let mode: &str = &(args[1]);
+  match mode {
+    "once" => {
+      if args.len() != 4 {
+        panic!("Not enough arguments provided. Expecting mode input_hand pot");
+      }
+      // example hand input: "C8 H5 H7 D12 D6"
+      // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
+      calculcate_hand_ev(&(args[2]), &(args[3]), &card_deck, &starting_hands, &combinations);
+    },
+    "loop" => {
+      let trigger_path_file = Path::new(&trigger_path);
+      loop {
+        if trigger_path_file.exists() {
+          let input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap();
+          let input_hand2 = input_hand.trim();
+          let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap();
+          fs::remove_file(trigger_path_file).unwrap();
+
+          calculcate_hand_ev(&input_hand2, &input_pot, &card_deck, &starting_hands, &combinations);
+          println!("END");
+        } else {
+          let sleep_amount = Duration::from_millis(100);
+          thread::sleep(sleep_amount);
+        }        
+      }
+    }
+    _ => panic!("unknown mode: {}", mode),
+  };
 
   Ok(())
 }
