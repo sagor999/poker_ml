@@ -704,7 +704,11 @@ fn main() -> Result<(), Error> {
     } else {
       action = "BAD CALL";
     }
-    println!("{:<20}:{:.1}%  pot odds: {:.1}%, action: {}", s, perc*100.0, pot_perc*100.0, action);
+    if pot_perc == 0.0 {
+      println!("{:<20}:{:.1}%", s, perc*100.0);
+    } else {
+      println!("{:<20}:{:.1}%  pot odds: {:.1}%, action: {}", s, perc*100.0, pot_perc*100.0, action);
+    }
   }
 
   //println!("Oppont: {:.2}%", oppon_eq*100.0);
