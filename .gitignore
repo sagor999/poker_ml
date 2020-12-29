@@ -20,3 +20,6 @@ ocr/data/ocr.png
 card_recognizer_ml/data/add_to_train/*
 expected_value/data/combinations.bin
 ocr/data/trigger
+expected_value/data/input_hand
+card_recognizer_ml/data/model1.tf.data-00000-of-00001
+card_recognizer_ml/data/model1.tf.index

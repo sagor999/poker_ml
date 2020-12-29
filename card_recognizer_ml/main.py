@@ -13,7 +13,7 @@ from tensorflow.keras.models import Sequential
 
 import numpy as np
 
-checkpoint_path = "/data/cp.ckpt"
+checkpoint_path = "/data/model1.tf"
 checkpoint_dir = os.path.dirname(checkpoint_path)
 
 num_classes = 53
@@ -107,7 +107,7 @@ if Training:
                                                   save_best_only=True)
 
   # train
-  epochs=1000
+  epochs=10000
   history = model.fit(
     train_ds,
     validation_data=val_ds,
