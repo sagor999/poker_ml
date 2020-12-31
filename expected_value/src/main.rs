@@ -453,7 +453,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
   return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
-fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
+fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
   //let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
   let mut main_pot = 0.0;
@@ -497,19 +497,15 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
   if input_cards.len() == 2 {
     input_cards.sort();
     let (_, avg_eq, _) = starting_hands[&input_cards];
-    /*let action;
-    if start_eq < 0.5 {
-      action = "FOLD";
-    } else {
-      action = "CALL";
-    }*/
-    println!("hand cards: {:?}, Eq: {:.2}%", input_cards, avg_eq*100.0);
-
+    /*let mut win_ch = 0.0;
     {
-      let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[&input_cards];
-      let win_ch = num_won as f64/num_total as f64;
-      println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", input_cards, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
-    }
+      let (num_won, num_total, _, _won_flop, _won_turn, _won_river) = simulated_hands[&input_cards];
+      win_ch = num_won as f64/num_total as f64;
+      //println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", input_cards, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
+    }*/
+
+    println!("hand cards: {:?}, AvgEq: {:.2}%", input_cards, avg_eq*100.0);
+
   
     return
   }
@@ -553,6 +549,13 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
   }
 
   // show my hands relative strength to any opponent's hand. essentially it is my equity
+  /*let mut win_ch = 0.0;
+  {
+    let (num_won, num_total, _, _won_flop, _won_turn, _won_river) = simulated_hands[&hand];
+    win_ch = num_won as f64/num_total as f64;
+    //println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", hand, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
+  }*/
+
   println!("Hand Equity: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
   let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
   sorted_keys.sort();
@@ -579,12 +582,6 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
     } else {
       println!("{:<20}:{:.1}%  pot odds: {:.1}%, action: {}", s, perc*100.0, pot_perc*100.0, action);
     }
-  }
-
-  {
-    let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[&hand];
-    let win_ch = num_won as f64/num_total as f64;
-    println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", hand, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
   }
 
   //let duration_main = start_main_ts.elapsed();
