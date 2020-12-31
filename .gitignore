@@ -29,3 +29,5 @@ hand_predictor_ml/data/ml_val.csv
 hand_predictor_ml/data/model.tf/saved_model.pb
 hand_predictor_ml/data/model.tf/variables/variables.data-00000-of-00001
 hand_predictor_ml/data/model.tf/variables/variables.index
+ocr/data/ocr2.png
+expected_value/data/input_action
