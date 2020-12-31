@@ -453,10 +453,10 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
   return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
-fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
+fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
   //let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
-  let mut main_pot = 0.0;
+  //let mut main_pot = 0.0;
   if pot_str.contains('$') {
     let split_pot_str: Vec<&str> = pot_str.split('\n').collect();
     for s in split_pot_str {
@@ -467,14 +467,21 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
         if pot_name == "total pot" {
           let (_t, am) = s2.split_at(3);
           total_pot = am.parse::<f32>().unwrap();
-        } else if pot_name == "main pot" {
+        }/* else if pot_name == "main pot" {
           let (_t, am) = s2.split_at(3);
           main_pot = am.parse::<f32>().unwrap();
-        }
+        }*/
       }      
     }
   }
-  let call_amount = total_pot-main_pot;
+  let mut call_amount = 0.0;
+  if action_str.contains("CALL") {
+    let dollar_sign = action_str.find('$');
+    if dollar_sign != None {
+      let (_, amount_str) = action_str.split_at(dollar_sign.unwrap()+1);
+      call_amount = amount_str.parse::<f32>().unwrap();
+    }
+  }
   //println!("{}, {}", total_pot, main_pot);
 
   let mut input_cards = conv_string_to_cards(&input);
@@ -525,7 +532,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
 
   println!("hand cards: {:?}", hand);
   println!("community cards: {:?}", community);
-  //println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
+  println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
 
   let mut all_cards = Vec::<Card>::new();
   all_cards.extend(hand.to_vec().iter());
@@ -533,7 +540,9 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
 
   let (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands) 
     = get_hand_equity_and_opponent_range(&hand, &community, &combinations, &starting_hands, &card_deck);
-  let num_cards_in_deck_left = (card_deck.len()-community.len()-hand.len()) as i32;
+  
+  let num_opponents = 1; // todo: add support for how many opponents are active on the table
+  let num_cards_in_deck_left = (card_deck.len()-community.len()-hand.len()) as i32 - num_opponents*2;
 
   //println!("Oppont: {:.2}%", oppon_eq*100.0);
   //println!("{:.3}-{:.3}", min_eq, max_eq);
@@ -547,6 +556,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
     let s = hand_type.to_string();
     println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/opponent_num_hands as f32)*100.0);
   }
+  println!("");
 
   // show my hands relative strength to any opponent's hand. essentially it is my equity
   /*let mut win_ch = 0.0;
@@ -557,30 +567,37 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
   }*/
 
   println!("Hand Equity: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
+  println!("EV:");
+  if call_amount > 0.0 {
+    let ev = calculate_ev(total_pot, call_amount, real_my_hand_eq);
+    println!("CALL  ${:.2}: {:+.2}", call_amount, ev);
+    let ev = calculate_ev(total_pot, call_amount*2.0, real_my_hand_eq);
+    println!("RAISE ${:.2}: {:+.2}", call_amount*2.0, ev);
+  } else {
+    let ev = calculate_ev(total_pot, total_pot*0.33, real_my_hand_eq);
+    println!("RAISE(1/3) ${:.2}: {:+.2}", total_pot*0.33, ev);
+    let ev = calculate_ev(total_pot, total_pot*0.66, real_my_hand_eq);
+    println!("RAISE(2/3) ${:.2}: {:+.2}", total_pot*0.66, ev);
+    let ev = calculate_ev(total_pot, total_pot, real_my_hand_eq);
+    println!("RAISE(pot) ${:.2}: {:+.2}", total_pot, ev);
+  }
   let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
   sorted_keys.sort();
+  if sorted_keys.len() > 0 {
+    println!("Drawing hands:");
+  }
   for hand_type in sorted_keys {
     let s = hand_type.to_string();
     let num_outs = improved_hands_hash_map[hand_type];
-    let perc = num_outs as f32/(num_cards_in_deck_left-num_outs) as f32;
-    // todo: to make proper call calc need to add info about how many players are betting
-    let new_total_pot = total_pot+call_amount; // this is if I add my call to the pot
-    let pot_perc;
-    if new_total_pot > 0.0 && call_amount > 0.0 {
-      pot_perc = call_amount / new_total_pot;
+    let perc = num_outs as f32/num_cards_in_deck_left as f32;
+    //println!("{}: {}/{} = {:.2}", hand_type, num_outs, num_cards_in_deck_left, perc);
+    //let new_total_pot = total_pot+call_amount; // this is if I add my call to the pot
+    if call_amount == 0.0 {
+      let ev = calculate_ev(total_pot, total_pot*0.33, perc);
+      println!("{:<20}:{:.1}%  RAISE(1/3) EV: {:+.2}", s, perc*100.0, ev);
     } else {
-      pot_perc = 0.0;
-    }
-    let action;
-    if perc > pot_perc {
-      action = "CALL";
-    } else {
-      action = "BAD CALL";
-    }
-    if pot_perc == 0.0 {
-      println!("{:<20}:{:.1}%", s, perc*100.0);
-    } else {
-      println!("{:<20}:{:.1}%  pot odds: {:.1}%, action: {}", s, perc*100.0, pot_perc*100.0, action);
+      let ev = calculate_ev(total_pot, call_amount, perc);
+      println!("{:<20}:{:.1}%  CALL EV: {:+.2}", s, perc*100.0, ev);
     }
   }
 
@@ -597,6 +614,7 @@ fn main() -> Result<(), Error> {
   let trigger_path: String =        "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/trigger".to_string();
   let input_hand_path: String =     "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_hand".to_string();
   let input_pot_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_pot".to_string();
+  let input_action_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_action".to_string();
 
   let card_deck = conv_string_to_cards("2c 3c 4c 5c 6c 7c 8c 9c Tc Jc Qc Kc Ac 2h 3h 4h 5h 6h 7h 8h 9h Th Jh Qh Kh Ah 2s 3s 4s 5s 6s 7s 8s 9s Ts Js Qs Ks As 2d 3d 4d 5d 6d 7d 8d 9d Td Jd Qd Kd Ad");
 
@@ -709,23 +727,25 @@ fn main() -> Result<(), Error> {
   let mode: &str = &(args[1]);
   match mode {
     "once" => {
-      if args.len() != 4 {
-        panic!("Not enough arguments provided. Expecting mode input_hand pot");
+      if args.len() != 5 {
+        panic!("Not enough arguments provided. Expecting mode input_hand pot, got: {}", args.len());
       }
       // example hand input: "C8 H5 H7 D12 D6"
       // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
-      calculcate_hand_ev(&(args[2]), &(args[3]), &card_deck, &starting_hands, &combinations, &simulated_hands);
+      calculcate_hand_ev(&(args[2]), &(args[3]), &(args[4]), &card_deck, &starting_hands, &combinations, &simulated_hands);
     },
     "loop" => {
       let trigger_path_file = Path::new(&trigger_path);
       loop {
         if trigger_path_file.exists() {
-          let input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap();
-          let input_hand2 = input_hand.trim();
+          let mut input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap();
+          input_hand = input_hand.trim().to_string();
           let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap();
+          let mut input_action = fs::read_to_string(Path::new(&input_action_path)).unwrap();
+          input_action = input_action.trim().to_string();
           fs::remove_file(trigger_path_file).unwrap();
 
-          calculcate_hand_ev(&input_hand2, &input_pot, &card_deck, &starting_hands, &combinations, &simulated_hands);
+          calculcate_hand_ev(&input_hand, &input_pot, &input_action, &card_deck, &starting_hands, &combinations, &simulated_hands);
           println!("END");
         } else {
           let sleep_amount = Duration::from_millis(100);
@@ -825,7 +845,7 @@ fn simulate_game(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulated_h
             num_wons = num_wons+1;
           }
           num_games = num_games+1;
-          *(simulated_hands.get_mut(&players[i].0).unwrap().2).entry(hand_rank).or_insert(1) += 1;
+          *(simulated_hands.get_mut(&players[i].0).unwrap().2).entry(hand_rank).or_insert(0) += 1;
           simulated_hands.get_mut(&players[i].0).unwrap().0 = num_wons;
           simulated_hands.get_mut(&players[i].0).unwrap().1 = num_games;
           if win_flop {
@@ -1040,7 +1060,8 @@ fn get_hand_equity_and_opponent_range(
         continue;
       }
       if htype > flop_hand_type {
-        *improved_hands_hash_map.entry(htype).or_insert(1) += 1;
+        *improved_hands_hash_map.entry(htype).or_insert(0) += 1;
+        //println!("{}: adding out of: {}", htype, remaining_deck[i]);
       }
     }    
   }
@@ -1076,7 +1097,7 @@ fn get_hand_equity_and_opponent_range(
       }
       total_eq = total_eq+eq;
       opponent_num_hands = opponent_num_hands+1;
-      *opponent_hands_hash_map.entry(htype).or_insert(1) += 1;
+      *opponent_hands_hash_map.entry(htype).or_insert(0) += 1;
     }
   }
 
@@ -1089,4 +1110,11 @@ fn get_hand_equity_and_opponent_range(
   real_my_hand_eq = real_my_hand_eq/range_eq;
 
   return (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands)
+}
+
+fn calculate_ev(total_pot: f32, call_amount: f32, win_ch: f32) -> f32 {
+  let ev_call_hit = total_pot * win_ch;
+  let ev_call_miss = -call_amount; // no need to multiply by 1-win_ch here. we either win (ev_call_hit) or we lose full amount.
+  let ev = ev_call_hit + ev_call_miss;
+  return ev
 }
