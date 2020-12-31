@@ -14,9 +14,12 @@ use std::cmp::Ordering;
 use serde::{Serialize, Deserialize};
 use std::path::Path;
 use std::env;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use std::cmp;
 use std::{thread};
+use rand::{RngCore, Rng, SeedableRng};
+use rand_chacha::{ChaCha20Core,ChaCha20Rng};
+use csv::Writer;
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 enum CardSuit {
@@ -50,7 +53,7 @@ impl fmt::Debug for CardSuit {
 
 #[derive(Hash, Clone, Copy, Serialize, Deserialize)]
 struct Card {
-  rank: u8,
+  rank: u8, // [2..14]
   suit: CardSuit,
 }
 
@@ -207,7 +210,7 @@ impl fmt::Display for HandData {
   }
 }
 
-#[derive(Hash, PartialEq, Eq, Ord, PartialOrd, Clone, Copy)]
+#[derive(Hash, PartialEq, Eq, Ord, PartialOrd, Clone, Copy, Serialize, Deserialize)]
 enum HandRank {
   HighCard = 1,
   Pair = 2,
@@ -222,6 +225,23 @@ enum HandRank {
 }
 
 impl fmt::Display for HandRank {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      HandRank::HighCard      => write!(f, "0/9 High card"),
+      HandRank::Pair          => write!(f, "1/9 Pair"),
+      HandRank::TwoPairs      => write!(f, "2/9 Two Pairs"),
+      HandRank::ThreeOfAKind  => write!(f, "3/9 Three of a Kind"),
+      HandRank::Straight      => write!(f, "4/9 Straight"),
+      HandRank::Flush         => write!(f, "5/9 Flush"),
+      HandRank::FullHouse     => write!(f, "6/9 Full House"),
+      HandRank::FourOfAKind   => write!(f, "7/9 Four of a Kind"),
+      HandRank::StraightFlush => write!(f, "8/9 Straight Flush"),
+      HandRank::RoyalFlush    => write!(f, "9/9 Royal Flush"),
+    }
+  }
+}
+
+impl fmt::Debug for HandRank {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
       HandRank::HighCard      => write!(f, "0/9 High card"),
@@ -433,7 +453,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
   return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
-fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>) {
+fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
   //let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
   let mut main_pot = 0.0;
@@ -484,6 +504,13 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
       action = "CALL";
     }*/
     println!("hand cards: {:?}, Eq: {:.2}%", input_cards, avg_eq*100.0);
+
+    {
+      let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[&input_cards];
+      let win_ch = num_won as f64/num_total as f64;
+      println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", input_cards, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
+    }
+  
     return
   }
   if input_cards.len() < 5 {
@@ -508,76 +535,23 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
   all_cards.extend(hand.to_vec().iter());
   all_cards.extend(community.to_vec().iter());
 
-  let (_, flop_equity, flop_hand_type, _) = get_best_hand(&hand, &community, &combinations);
+  let (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands) 
+    = get_hand_equity_and_opponent_range(&hand, &community, &combinations, &starting_hands, &card_deck);
+  let num_cards_in_deck_left = (card_deck.len()-community.len()-hand.len()) as i32;
 
-  let community_cards = community.clone();
-  let num_comm_cards = community_cards.len();
-  // lets find cards that can improve our current hand
-  let mut remaining_deck = card_deck.to_vec();
-  for i in 0..community_cards.len() {
-    remaining_deck.retain(|&x| x != community_cards[i]);
-  }
-  remaining_deck.retain(|&x| x != hand[0]);
-  remaining_deck.retain(|&x| x != hand[1]);
-  let mut improved_hands_hash_map = HashMap::new();
-  if num_comm_cards == 3 || num_comm_cards == 4 {
-    for i in 0..remaining_deck.len() {
-      let mut new_comm_cards = community_cards.clone();
-      new_comm_cards.push(remaining_deck[i]);
-      let (_, _, htype, assembled_hand) = get_best_hand(&hand, &new_comm_cards, &combinations);
-      if is_hand_part_of_made_up_hand(&hand, &htype, &assembled_hand) == false {
-        continue;
-      }
-      if htype > flop_hand_type {
-        *improved_hands_hash_map.entry(htype).or_insert(1) += 1;
-      }
-    }    
-  }
-
-  // now find what hands an opponent can potentially have based on community cards so far
-  let mut remaining_deck = card_deck.to_vec();
-  for i in 0..community_cards.len() {
-    remaining_deck.retain(|&x| x != community_cards[i]);
-  }
-  remaining_deck.retain(|&x| x != hand[0]);
-  remaining_deck.retain(|&x| x != hand[1]);
-  let num_cards_in_deck_left = remaining_deck.len();
-
-  let mut num_hands = 0;
-  let mut total_eq = 0.0;
-  let mut min_eq = 1000.0;
-  let mut max_eq = 0.0;
-  let mut opponent_hands_hash_map = HashMap::new();
-  for i in 0..remaining_deck.len() {
-    for j in (i+1)..remaining_deck.len() {
-      let mut h = vec![remaining_deck[i],remaining_deck[j]];
-      h.sort();
-      // skip all really crappy hands that majority of players 'should' never play
-      let (_, avg_eq, _) = starting_hands[&h];
-      if avg_eq < 0.35 {
-        continue; 
-      }
-      let (_, eq, htype, _) = get_best_hand(&h, &community_cards, &combinations);
-      if eq < min_eq {
-        min_eq = eq;
-      }
-      if eq > max_eq {
-        max_eq = eq;
-      }
-      total_eq = total_eq+eq;
-      num_hands = num_hands+1;
-      *opponent_hands_hash_map.entry(htype).or_insert(1) += 1;
+  //println!("Oppont: {:.2}%", oppon_eq*100.0);
+  //println!("{:.3}-{:.3}", min_eq, max_eq);
+  println!("Opponent hand range:");
+  let mut sorted_keys: Vec<&HandRank> = opponent_hands_hash_map.keys().collect();
+  sorted_keys.sort();
+  for hand_type in sorted_keys {
+    if *hand_type == HandRank::HighCard {
+      continue;
     }
+    let s = hand_type.to_string();
+    println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/opponent_num_hands as f32)*100.0);
   }
-  //let oppon_eq = total_eq/num_hands as f32;
 
-  // now calculate 'real' hand equity based on potential range of opponent hands
-  let range_eq = max_eq-min_eq;
-  let mut real_my_hand_eq = flop_equity-min_eq;
-  if real_my_hand_eq < 0.0 {
-    real_my_hand_eq = 0.0;
-  }
-  real_my_hand_eq = real_my_hand_eq/range_eq;
   // show my hands relative strength to any opponent's hand. essentially it is my equity
   println!("Hand Equity: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
   let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
@@ -607,17 +581,10 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, card_deck: &Vec<Card>, startin
     }
   }
 
-  //println!("Oppont: {:.2}%", oppon_eq*100.0);
-  //println!("{:.3}-{:.3}", min_eq, max_eq);
-  println!("Opponent hand range:");
-  let mut sorted_keys: Vec<&HandRank> = opponent_hands_hash_map.keys().collect();
-  sorted_keys.sort();
-  for hand_type in sorted_keys {
-    if *hand_type == HandRank::HighCard {
-      continue;
-    }
-    let s = hand_type.to_string();
-    println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/num_hands as f32)*100.0);
+  {
+    let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[&hand];
+    let win_ch = num_won as f64/num_total as f64;
+    println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", hand, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
   }
 
   //let duration_main = start_main_ts.elapsed();
@@ -628,6 +595,7 @@ fn main() -> Result<(), Error> {
   //let start_init_ts = Instant::now();
   let combinations_path: String =   "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/combinations.bin".to_string();
   let starting_hands_path: String = "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/starting_hands.bin".to_string();
+  let simulated_hands_path: String = "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/simulated_hands.bin".to_string();
   let hands_csv_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/hands.csv".to_string();
   let trigger_path: String =        "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/trigger".to_string();
   let input_hand_path: String =     "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_hand".to_string();
@@ -697,14 +665,41 @@ fn main() -> Result<(), Error> {
     bincode::serialize_into(&mut f, &starting_hands).unwrap();
   }
 
-  /*let mut hands: Vec<&Vec<Card>> = starting_hands.keys().collect();
+  // hash map of starting hand and tuple of 
+  //      (number of games won, total number of games seen, hand rank of this game, 
+  //      number of times this hand was winning hand starting with preflop,
+  //      number of times this hand become winning on the turn,
+  //      number of times this hand become winning on the river)
+  let mut simulated_hands = HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>::new();
+  if Path::new(&simulated_hands_path).exists() {
+    let f = BufReader::new(File::open(simulated_hands_path).unwrap());
+    simulated_hands = bincode::deserialize_from(f).unwrap();
+  } else {
+    println!("Generating simulated hands...");
+    simulate_game(10, 10000000, 6, &mut simulated_hands, &combinations, &card_deck);
+
+    let mut f = BufWriter::new(File::create(simulated_hands_path).unwrap());
+    bincode::serialize_into(&mut f, &simulated_hands).unwrap();
+  }
+  
+  /*let mut test_hand = conv_string_to_cards("Ks 8s");
+  test_hand.sort();
+  let (num_won, num_total, _) = simulated_hands[&test_hand];
+  println!("{:.2}% - {:?}", (num_won as f64/num_total as f64)*100.0, simulated_hands[&test_hand].2);
+  */
+
+  /*let mut hands: Vec<&Vec<Card>> = simulated_hands.keys().collect();
   hands.sort();
   for h in hands {
-    let (min_eq, _, _) = starting_hands[h];
-    if min_eq > 0.15 {
-      println!("{:?} - {:.2}%", h, min_eq*100.0);
+    let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[h];
+    let win_ch = num_won as f64/num_total as f64;
+    if win_ch > 0.2 {
+      println!("{:?} - {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", h, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
     }
   }*/
+
+  // generate ml data
+  //generate_ml_data(10, 1000000, 6, &simulated_hands, &combinations, &card_deck, &starting_hands);
 
   //let duration_init = start_init_ts.elapsed();
   //println!("Init duration is: {:?}", duration_init);
@@ -722,7 +717,7 @@ fn main() -> Result<(), Error> {
       }
       // example hand input: "C8 H5 H7 D12 D6"
       // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
-      calculcate_hand_ev(&(args[2]), &(args[3]), &card_deck, &starting_hands, &combinations);
+      calculcate_hand_ev(&(args[2]), &(args[3]), &card_deck, &starting_hands, &combinations, &simulated_hands);
     },
     "loop" => {
       let trigger_path_file = Path::new(&trigger_path);
@@ -733,7 +728,7 @@ fn main() -> Result<(), Error> {
           let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap();
           fs::remove_file(trigger_path_file).unwrap();
 
-          calculcate_hand_ev(&input_hand2, &input_pot, &card_deck, &starting_hands, &combinations);
+          calculcate_hand_ev(&input_hand2, &input_pot, &card_deck, &starting_hands, &combinations, &simulated_hands);
           println!("END");
         } else {
           let sleep_amount = Duration::from_millis(100);
@@ -745,4 +740,356 @@ fn main() -> Result<(), Error> {
   };
 
   Ok(())
+}
+
+fn simulate_game(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulated_hands: &mut HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>, combinations: &HashMap<Vec<Card>,(f32,f32)>, card_deck: &Vec<Card>) {
+
+  let mut rng = ChaCha20Rng::seed_from_u64(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
+
+  let num_cards_in_deck = card_deck.len() as u32;
+
+  for outter_run in 0..outter_runs {
+    for sim_run_iter in 0..max_sim_runs {
+      println!("Running sim {}:{}/{}", outter_run+1, sim_run_iter+1, max_sim_runs);
+
+      let mut new_deck = card_deck.clone();
+      // shuffle cards
+      for ctr in 0..new_deck.len() {
+        let random_number = (rng.next_u32() % num_cards_in_deck) as usize;
+        let tmp = new_deck[random_number];
+        new_deck[random_number] = new_deck[ctr];
+        new_deck[ctr] = tmp;
+      }
+
+      let mut players = Vec::<(Vec<Card>,(f32, HandRank, bool, bool, bool))>::new();
+      players.resize(num_pl, (Vec::<Card>::new(),(0.0, HandRank::HighCard, false, false, false)));
+      for i in 0..num_pl {
+        players[i].0.push(new_deck.pop().unwrap());
+      }
+      for i in 0..num_pl {
+        players[i].0.push(new_deck.pop().unwrap());
+        players[i].0.sort();
+      }
+      //println!("{:?}", players);
+      let mut community_cards = Vec::<Card>::new();
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      //println!("{:?}", community_cards);
+      for i in 0..num_pl {
+        let (_, hand_equity, hand_rank, _) = get_best_hand(&players[i].0, &community_cards, &combinations);
+        players[i].1 = (hand_equity, hand_rank, false, false, false);
+      }
+      //println!("{:?}", players);
+      players.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+      //println!("{:?}", players);
+      //now test if hand was winning starting with the flop
+      let mut temp_players = players.clone();
+      let mut flop_only = community_cards.clone();
+      flop_only.pop();
+      flop_only.pop();
+      for i in 0..num_pl {
+        let (_, hand_equity, hand_rank, _) = get_best_hand(&players[i].0, &flop_only, &combinations);
+        temp_players[i].1 = (hand_equity, hand_rank, false, false, false);
+      }
+      temp_players.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+      // now see if top player was top on the flop
+      if temp_players[0].0 == players[0].0 {
+        players[0].1.2 = true;
+      }
+
+      //now test if hand was winning starting with the turn
+      let mut temp_players = players.clone();
+      let mut flop_and_turn_only = community_cards.clone();
+      flop_and_turn_only.pop();
+      for i in 0..num_pl {
+        let (_, hand_equity, hand_rank, _) = get_best_hand(&players[i].0, &flop_and_turn_only, &combinations);
+        temp_players[i].1 = (hand_equity, hand_rank, false, false, false);
+      }
+      temp_players.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+      // now see if top player was top on the turn and was not already at the top on flop
+      if temp_players[0].0 == players[0].0 && players[0].1.2 == false {
+        players[0].1.3 = true;
+      }
+
+      // and now test if top player become top only on the river
+      if players[0].1.2 == false && players[0].1.3 == false {
+        players[0].1.4 = true;
+      }
+
+
+      for i in 0..num_pl {
+        let (_, hand_rank, win_flop, win_turn, win_river) = players[i].1;
+        if simulated_hands.contains_key(&players[i].0) {
+          let (mut num_wons, mut num_games, _, num_won_flop, num_won_turn, num_won_river) = simulated_hands[&players[i].0];
+          if i == 0 {
+            num_wons = num_wons+1;
+          }
+          num_games = num_games+1;
+          *(simulated_hands.get_mut(&players[i].0).unwrap().2).entry(hand_rank).or_insert(1) += 1;
+          simulated_hands.get_mut(&players[i].0).unwrap().0 = num_wons;
+          simulated_hands.get_mut(&players[i].0).unwrap().1 = num_games;
+          if win_flop {
+            simulated_hands.get_mut(&players[i].0).unwrap().3 = num_won_flop+1;
+          }
+          if win_turn {
+            simulated_hands.get_mut(&players[i].0).unwrap().4 = num_won_turn+1;
+          }
+          if win_river {
+            simulated_hands.get_mut(&players[i].0).unwrap().5 = num_won_river+1;
+          }
+        } else {
+          let mut ranks = HashMap::<HandRank, u64>::new();
+          ranks.insert(hand_rank, 1);
+          if i == 0 {
+            simulated_hands.insert(players[i].0.clone(), (1,1, ranks, win_flop as u64, win_turn as u64, win_river as u64));
+          } else {
+            simulated_hands.insert(players[i].0.clone(), (0,1, ranks, win_flop as u64, win_turn as u64, win_river as u64));
+          }
+        }
+      }
+      //println!("{:?}", simulated_hands);
+    }
+  }
+}
+
+fn convert_card_to_int(card: &Card) -> u32 {
+  match card.suit {
+    CardSuit::Heart => (card.rank as u32)-1, // [2..14] -> [1..13]
+    CardSuit::Spade => 13+((card.rank as u32)-1), // [2..14] -> [14..26]
+    CardSuit::Club => 26+((card.rank as u32)-1), 
+    CardSuit::Diamond => 39+((card.rank as u32)-1), 
+  }
+}
+
+fn generate_ml_data(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>, combinations: &HashMap<Vec<Card>,(f32,f32)>, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>) {
+  let ml_data_path = "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/ml_data.csv".to_string();
+  let mut csv_writer = Writer::from_path(ml_data_path).unwrap();
+
+  let mut rng = ChaCha20Rng::seed_from_u64(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs());
+
+  let num_cards_in_deck = card_deck.len() as u32;
+
+  // write header
+  csv_writer.write_field("state").unwrap();
+  csv_writer.write_field("hand1").unwrap();
+  csv_writer.write_field("hand2").unwrap();
+  csv_writer.write_field("flop1").unwrap();
+  csv_writer.write_field("flop2").unwrap();
+  csv_writer.write_field("flop3").unwrap();
+  csv_writer.write_field("turn").unwrap();
+  csv_writer.write_field("river").unwrap();
+  csv_writer.write_field("win_chance").unwrap();
+  csv_writer.write_field("won_on_flop").unwrap();
+  csv_writer.write_field("won_on_turn").unwrap();
+  csv_writer.write_field("won_on_river").unwrap();
+  csv_writer.write_field("hand_equity").unwrap();
+  csv_writer.write_field("did_win").unwrap();
+  csv_writer.write_record(None::<&[u8]>).unwrap();  
+
+  for outter_run in 0..outter_runs {
+    for sim_run_iter in 0..max_sim_runs {
+      println!("Running sim {}:{}/{}", outter_run+1, sim_run_iter+1, max_sim_runs);
+
+      let mut new_deck = card_deck.clone();
+      // shuffle cards
+      for ctr in 0..new_deck.len() {
+        let random_number = (rng.next_u32() % num_cards_in_deck) as usize;
+        let tmp = new_deck[random_number];
+        new_deck[random_number] = new_deck[ctr];
+        new_deck[ctr] = tmp;
+      }
+
+      let mut players = Vec::<(Vec<Card>,(f32, HandRank))>::new();
+      players.resize(num_pl, (Vec::<Card>::new(),(0.0, HandRank::HighCard)));
+      for i in 0..num_pl {
+        players[i].0.push(new_deck.pop().unwrap());
+      }
+      for i in 0..num_pl {
+        players[i].0.push(new_deck.pop().unwrap());
+        players[i].0.sort();
+      }
+      //println!("{:?}", players);
+      let mut community_cards = Vec::<Card>::new();
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      community_cards.push(new_deck.pop().unwrap());
+      //println!("{:?}", community_cards);
+      for i in 0..num_pl {
+        let (_, hand_equity, hand_rank, _) = get_best_hand(&players[i].0, &community_cards, &combinations);
+        players[i].1 = (hand_equity, hand_rank);
+      }
+      //println!("{:?}", players);
+      players.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+      let my_player_idx = (rng.next_u32() % (num_pl as u32)) as usize;
+      let my_player_won;
+      if my_player_idx == 0 {
+        my_player_won = 1;
+      } else {
+        my_player_won = 0;
+      }
+      // PRE-FLOP
+      csv_writer.write_field("PREFLOP").unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[0].to_string()).unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[1].to_string()).unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field("none").unwrap();
+      let (num_won, num_total, _, won_flop, won_turn, won_river) = simulated_hands[&players[my_player_idx].0];
+      let win_ch = num_won as f64/num_total as f64;
+      csv_writer.write_field(win_ch.to_string()).unwrap();
+      let won_on_flop = won_flop as f64/num_won as f64;
+      csv_writer.write_field(won_on_flop.to_string()).unwrap();
+      let won_on_turn = won_turn as f64/num_won as f64;
+      csv_writer.write_field(won_on_turn.to_string()).unwrap();
+      let won_on_river = won_river as f64/num_won as f64;
+      csv_writer.write_field(won_on_river.to_string()).unwrap();
+      let hand_eq = starting_hands[&players[my_player_idx].0].1;
+      csv_writer.write_field(hand_eq.to_string()).unwrap();
+      csv_writer.write_field(my_player_won.to_string()).unwrap();
+      csv_writer.write_record(None::<&[u8]>).unwrap();
+      // FLOP
+      csv_writer.write_field("FLOP").unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[0].to_string()).unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[0].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[2].to_string()).unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field(win_ch.to_string()).unwrap();
+      csv_writer.write_field(won_on_flop.to_string()).unwrap();
+      csv_writer.write_field(won_on_turn.to_string()).unwrap();
+      csv_writer.write_field(won_on_river.to_string()).unwrap();
+      let mut flop_cards = community_cards.clone();
+      flop_cards.pop();
+      flop_cards.pop();
+      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
+      csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
+      csv_writer.write_field(my_player_won.to_string()).unwrap();
+      csv_writer.write_record(None::<&[u8]>).unwrap();
+      // TURN
+      csv_writer.write_field("TURN").unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[0].to_string()).unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[0].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[2].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[3].to_string()).unwrap();
+      csv_writer.write_field("none").unwrap();
+      csv_writer.write_field(win_ch.to_string()).unwrap();
+      csv_writer.write_field(won_on_flop.to_string()).unwrap();
+      csv_writer.write_field(won_on_turn.to_string()).unwrap();
+      csv_writer.write_field(won_on_river.to_string()).unwrap();
+      let mut flop_cards = community_cards.clone();
+      flop_cards.pop();
+      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
+      csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
+      csv_writer.write_field(my_player_won.to_string()).unwrap();
+      csv_writer.write_record(None::<&[u8]>).unwrap();
+      // RIVER
+      csv_writer.write_field("RIVER").unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[0].to_string()).unwrap();
+      csv_writer.write_field(&players[my_player_idx].0[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[0].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[1].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[2].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[3].to_string()).unwrap();
+      csv_writer.write_field(&community_cards[4].to_string()).unwrap();
+      csv_writer.write_field(win_ch.to_string()).unwrap();
+      csv_writer.write_field(won_on_flop.to_string()).unwrap();
+      csv_writer.write_field(won_on_turn.to_string()).unwrap();
+      csv_writer.write_field(won_on_river.to_string()).unwrap();
+      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &community_cards, &combinations, &starting_hands, &card_deck);
+      csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
+      csv_writer.write_field(my_player_won.to_string()).unwrap();
+      csv_writer.write_record(None::<&[u8]>).unwrap();
+     
+      csv_writer.flush().unwrap();
+    }
+  }
+}
+
+fn get_hand_equity_and_opponent_range(
+  hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>, (f32,f32)>,
+  starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, card_deck: &Vec<Card>
+) -> (HandRank, f32, HashMap<HandRank, i32>, HashMap<HandRank, i32>, i32) {
+    
+  let (_, flop_equity, flop_hand_type, _) = get_best_hand(&hand, &community, &combinations);
+
+  let community_cards = community.clone();
+  let num_comm_cards = community_cards.len();
+  // lets find cards that can improve our current hand
+  let mut remaining_deck = card_deck.to_vec();
+  for i in 0..community_cards.len() {
+    remaining_deck.retain(|&x| x != community_cards[i]);
+  }
+  remaining_deck.retain(|&x| x != hand[0]);
+  remaining_deck.retain(|&x| x != hand[1]);
+  let mut improved_hands_hash_map = HashMap::new();
+  if num_comm_cards == 3 || num_comm_cards == 4 {
+    for i in 0..remaining_deck.len() {
+      let mut new_comm_cards = community_cards.clone();
+      new_comm_cards.push(remaining_deck[i]);
+      let (_, _, htype, assembled_hand) = get_best_hand(&hand, &new_comm_cards, &combinations);
+      if is_hand_part_of_made_up_hand(&hand, &htype, &assembled_hand) == false {
+        continue;
+      }
+      if htype > flop_hand_type {
+        *improved_hands_hash_map.entry(htype).or_insert(1) += 1;
+      }
+    }    
+  }
+
+  // now find what hands an opponent can potentially have based on community cards so far
+  let mut remaining_deck = card_deck.to_vec();
+  for i in 0..community_cards.len() {
+    remaining_deck.retain(|&x| x != community_cards[i]);
+  }
+  remaining_deck.retain(|&x| x != hand[0]);
+  remaining_deck.retain(|&x| x != hand[1]);
+
+  let mut opponent_num_hands = 0;
+  let mut total_eq = 0.0;
+  let mut min_eq = 1000.0;
+  let mut max_eq = 0.0;
+  let mut opponent_hands_hash_map = HashMap::new();
+  for i in 0..remaining_deck.len() {
+    for j in (i+1)..remaining_deck.len() {
+      let mut h = vec![remaining_deck[i],remaining_deck[j]];
+      h.sort();
+      // skip all really crappy hands that majority of players 'should' never play
+      let (_, avg_eq, _) = starting_hands[&h];
+      if avg_eq < 0.35 {
+        continue; 
+      }
+      let (_, eq, htype, _) = get_best_hand(&h, &community_cards, &combinations);
+      if eq < min_eq {
+        min_eq = eq;
+      }
+      if eq > max_eq {
+        max_eq = eq;
+      }
+      total_eq = total_eq+eq;
+      opponent_num_hands = opponent_num_hands+1;
+      *opponent_hands_hash_map.entry(htype).or_insert(1) += 1;
+    }
+  }
+
+  // now calculate 'real' hand equity based on potential range of opponent hands
+  let range_eq = max_eq-min_eq;
+  let mut real_my_hand_eq = flop_equity-min_eq;
+  if real_my_hand_eq < 0.0 {
+    real_my_hand_eq = 0.0;
+  }
+  real_my_hand_eq = real_my_hand_eq/range_eq;
+
+  return (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands)
 }
