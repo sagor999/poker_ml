@@ -15,3 +15,4 @@ RUN apt-get install python3-pip -y
 
 RUN pip3 install Pillow
 RUN pip3 install pytesseract
+RUN pip3 install unidecode
