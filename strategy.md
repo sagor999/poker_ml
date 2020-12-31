@@ -13,3 +13,15 @@ Fold the rest.
 Flop:
 
 
+
+
+verify flush odds. I think it should be close to 25%?
+which would mean calling with any suited hands is a good strategy:
+5108 hands of flush. probability is 0.001
+
+and then odds of a straight when holding connectors:
+there are 10,200 straight hands. probability is 0.003
+
+so it would seem like hoping for the flush might not be all that great of a strategy.
+especially if playing with 72 or 48 etc type of hands, that have very little chance of
+connecting in other ways. 
