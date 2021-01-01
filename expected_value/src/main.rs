@@ -574,10 +574,10 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     let ev = calculate_ev(total_pot, call_amount*2.0, real_my_hand_eq);
     println!("RAISE ${:.2}: {:+.2}", call_amount*2.0, ev);
   } else {
-    let ev = calculate_ev(total_pot, total_pot*0.33, real_my_hand_eq);
-    println!("RAISE(1/3) ${:.2}: {:+.2}", total_pot*0.33, ev);
-    let ev = calculate_ev(total_pot, total_pot*0.66, real_my_hand_eq);
-    println!("RAISE(2/3) ${:.2}: {:+.2}", total_pot*0.66, ev);
+    let ev = calculate_ev(total_pot, total_pot*0.5, real_my_hand_eq);
+    println!("RAISE(1/2) ${:.2}: {:+.2}", total_pot*0.5, ev);
+    let ev = calculate_ev(total_pot, total_pot*0.75, real_my_hand_eq);
+    println!("RAISE(3/4) ${:.2}: {:+.2}", total_pot*0.75, ev);
     let ev = calculate_ev(total_pot, total_pot, real_my_hand_eq);
     println!("RAISE(pot) ${:.2}: {:+.2}", total_pot, ev);
   }
@@ -593,8 +593,8 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     //println!("{}: {}/{} = {:.2}", hand_type, num_outs, num_cards_in_deck_left, perc);
     //let new_total_pot = total_pot+call_amount; // this is if I add my call to the pot
     if call_amount == 0.0 {
-      let ev = calculate_ev(total_pot, total_pot*0.33, perc);
-      println!("{:<20}:{:.1}%  RAISE(1/3) EV: {:+.2}", s, perc*100.0, ev);
+      let ev = calculate_ev(total_pot, total_pot*0.5, perc);
+      println!("{:<20}:{:.1}%  RAISE(1/2) EV: {:+.2}", s, perc*100.0, ev);
     } else {
       let ev = calculate_ev(total_pot, call_amount, perc);
       println!("{:<20}:{:.1}%  CALL EV: {:+.2}", s, perc*100.0, ev);
