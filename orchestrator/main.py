@@ -1,5 +1,4 @@
-from PIL import Image, ImageGrab 
-from PIL import ImageChops
+from PIL import Image, ImageGrab, ImageChops, ImageOps
 import time
 import os
 import subprocess
@@ -62,8 +61,10 @@ while (True):
     for i in range(len(scan_areas)):
       im2 = ImageGrab.grab(bbox=scan_areas[i])
       if i==7:
+        im2 = ImageOps.invert(im2) # ocr prefers light background dark text
         im2.save("ocr/data/ocr.png")
       elif i==8:
+        im2 = ImageOps.invert(im2) # ocr prefers light background dark text
         im2.save("ocr/data/ocr2.png")
       else:
         im2.save("card_recognizer_ml/data/test/{}.png".format(i+1))
