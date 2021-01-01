@@ -538,7 +538,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
   all_cards.extend(hand.to_vec().iter());
   all_cards.extend(community.to_vec().iter());
 
-  let (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands) 
+  let (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands, rel_my_hand_eq) 
     = get_hand_equity_and_opponent_range(&hand, &community, &combinations, &starting_hands, &card_deck);
   
   let num_opponents = 1; // todo: add support for how many opponents are active on the table
@@ -550,9 +550,6 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
   let mut sorted_keys: Vec<&HandRank> = opponent_hands_hash_map.keys().collect();
   sorted_keys.sort();
   for hand_type in sorted_keys {
-    if *hand_type == HandRank::HighCard {
-      continue;
-    }
     let s = hand_type.to_string();
     println!("{:<20}:{:.1}%", s, (opponent_hands_hash_map[&hand_type] as f32/opponent_num_hands as f32)*100.0);
   }
@@ -566,7 +563,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     //println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", hand, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
   }*/
 
-  println!("Hand Equity: {:.2}%, Type: {}", real_my_hand_eq*100.0, flop_hand_type);
+  println!("Hand Equity: {:.2}%, Type: {} ({:.2}%)", real_my_hand_eq*100.0, flop_hand_type, rel_my_hand_eq*100.0);
   println!("EV:");
   if call_amount > 0.0 {
     let ev = calculate_ev(total_pot, call_amount, real_my_hand_eq);
@@ -988,7 +985,7 @@ fn generate_ml_data(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulate
       let mut flop_cards = community_cards.clone();
       flop_cards.pop();
       flop_cards.pop();
-      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
+      let (_, real_my_hand_eq, _, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
       csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
       csv_writer.write_field(my_player_won.to_string()).unwrap();
       csv_writer.write_record(None::<&[u8]>).unwrap();
@@ -1007,7 +1004,7 @@ fn generate_ml_data(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulate
       csv_writer.write_field(won_on_river.to_string()).unwrap();
       let mut flop_cards = community_cards.clone();
       flop_cards.pop();
-      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
+      let (_, real_my_hand_eq, _, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &flop_cards, &combinations, &starting_hands, &card_deck);
       csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
       csv_writer.write_field(my_player_won.to_string()).unwrap();
       csv_writer.write_record(None::<&[u8]>).unwrap();
@@ -1024,7 +1021,7 @@ fn generate_ml_data(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulate
       csv_writer.write_field(won_on_flop.to_string()).unwrap();
       csv_writer.write_field(won_on_turn.to_string()).unwrap();
       csv_writer.write_field(won_on_river.to_string()).unwrap();
-      let (_, real_my_hand_eq, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &community_cards, &combinations, &starting_hands, &card_deck);
+      let (_, real_my_hand_eq, _, _, _, _) = get_hand_equity_and_opponent_range(&players[my_player_idx].0, &community_cards, &combinations, &starting_hands, &card_deck);
       csv_writer.write_field(real_my_hand_eq.to_string()).unwrap();
       csv_writer.write_field(my_player_won.to_string()).unwrap();
       csv_writer.write_record(None::<&[u8]>).unwrap();
@@ -1036,8 +1033,8 @@ fn generate_ml_data(outter_runs: u32, max_sim_runs: u64, num_pl: usize, simulate
 
 fn get_hand_equity_and_opponent_range(
   hand: &Vec<Card>, community: &Vec<Card>, combinations: &HashMap<Vec<Card>, (f32,f32)>,
-  starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, card_deck: &Vec<Card>
-) -> (HandRank, f32, HashMap<HandRank, i32>, HashMap<HandRank, i32>, i32) {
+  _starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, card_deck: &Vec<Card>
+) -> (HandRank, f32, HashMap<HandRank, i32>, HashMap<HandRank, i32>, i32, f32) {
     
   let (_, flop_equity, flop_hand_type, _) = get_best_hand(&hand, &community, &combinations);
 
@@ -1078,22 +1075,32 @@ fn get_hand_equity_and_opponent_range(
   let mut total_eq = 0.0;
   let mut min_eq = 1000.0;
   let mut max_eq = 0.0;
+  let mut same_hand_type_min_eq = 1000.0;
+  let mut same_hand_type_max_eq = 0.0;
   let mut opponent_hands_hash_map = HashMap::new();
   for i in 0..remaining_deck.len() {
     for j in (i+1)..remaining_deck.len() {
       let mut h = vec![remaining_deck[i],remaining_deck[j]];
       h.sort();
       // skip all really crappy hands that majority of players 'should' never play
-      let (_, avg_eq, _) = starting_hands[&h];
-      if avg_eq < 0.35 {
-        continue; 
-      }
+      //let (_, avg_eq, _) = starting_hands[&h];
+      //if avg_eq < 0.35 {
+      //  continue; 
+      //}
       let (_, eq, htype, _) = get_best_hand(&h, &community_cards, &combinations);
       if eq < min_eq {
         min_eq = eq;
       }
       if eq > max_eq {
         max_eq = eq;
+      }
+      if htype == flop_hand_type {
+        if eq < same_hand_type_min_eq {
+          same_hand_type_min_eq = eq;
+        }
+        if eq > same_hand_type_max_eq {
+          same_hand_type_max_eq = eq;
+        }
       }
       total_eq = total_eq+eq;
       opponent_num_hands = opponent_num_hands+1;
@@ -1103,13 +1110,20 @@ fn get_hand_equity_and_opponent_range(
 
   // now calculate 'real' hand equity based on potential range of opponent hands
   let range_eq = max_eq-min_eq;
-  let mut real_my_hand_eq = flop_equity-min_eq;
-  if real_my_hand_eq < 0.0 {
-    real_my_hand_eq = 0.0;
+  // in case if my hand is the absolute weakest in the range
+  if flop_equity < min_eq {
+    min_eq = flop_equity;
   }
-  real_my_hand_eq = real_my_hand_eq/range_eq;
+  let real_my_hand_eq = (flop_equity-min_eq)/range_eq;
 
-  return (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands)
+  let rel_range_eq = same_hand_type_max_eq-same_hand_type_min_eq;
+  // in case if my hand is the absolute weakest in the range
+  if flop_equity < same_hand_type_min_eq {
+    same_hand_type_min_eq = flop_equity;
+  }
+  let rel_hand_eq = (flop_equity-same_hand_type_min_eq)/rel_range_eq;
+
+  return (flop_hand_type, real_my_hand_eq, improved_hands_hash_map, opponent_hands_hash_map, opponent_num_hands, rel_hand_eq)
 }
 
 fn calculate_ev(total_pot: f32, call_amount: f32, win_ch: f32) -> f32 {

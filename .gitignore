@@ -30,4 +30,6 @@ hand_predictor_ml/data/model.tf/saved_model.pb
 hand_predictor_ml/data/model.tf/variables/variables.data-00000-of-00001
 hand_predictor_ml/data/model.tf/variables/variables.index
 ocr/data/ocr2.png
+ocr/data/malformed/*
 expected_value/data/input_action
+expected_value/data/input_pot
