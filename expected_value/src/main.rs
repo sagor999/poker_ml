@@ -457,7 +457,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
   //let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
   //let mut main_pot = 0.0;
-  if pot_str.contains('$') {
+  if pot_str.contains("total pot") {
     let split_pot_str: Vec<&str> = pot_str.split('\n').collect();
     for s in split_pot_str {
       let semicolon = s.find(':');
@@ -465,8 +465,13 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
         let (s1, s2) = s.split_at(semicolon.unwrap());
         let pot_name = s1.to_lowercase();
         if pot_name == "total pot" {
-          let (_t, am) = s2.split_at(3);
-          total_pot = am.parse::<f32>().unwrap();
+          let mut split_at = 2;
+          if pot_str.contains('$') {
+            split_at = 3;
+          }
+          let (_t, am) = s2.split_at(split_at);
+          let am_fixed = am.replace(",", "");
+          total_pot = lexical::parse(am_fixed).unwrap();
         }/* else if pot_name == "main pot" {
           let (_t, am) = s2.split_at(3);
           main_pot = am.parse::<f32>().unwrap();
@@ -475,12 +480,15 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     }
   }
   let mut call_amount = 0.0;
-  if action_str.contains("CALL") {
+  if action_str.contains("call") {
+    let mut split_idx = action_str.find("call").unwrap() + 4 + 1;
     let dollar_sign = action_str.find('$');
     if dollar_sign != None {
-      let (_, amount_str) = action_str.split_at(dollar_sign.unwrap()+1);
-      call_amount = amount_str.parse::<f32>().unwrap();
+      split_idx +=1;
     }
+    let (_, amount_str) = action_str.split_at(split_idx);
+    let amount_fixed = amount_str.replace(",", "");
+    call_amount = lexical::parse(amount_fixed).unwrap();
   }
   //println!("{}, {}", total_pot, main_pot);
 
@@ -729,17 +737,15 @@ fn main() -> Result<(), Error> {
       }
       // example hand input: "C8 H5 H7 D12 D6"
       // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
-      calculcate_hand_ev(&(args[2]), &(args[3]), &(args[4]), &card_deck, &starting_hands, &combinations, &simulated_hands);
+      calculcate_hand_ev(&(args[2]), &(args[3].to_lowercase()), &(args[4].to_lowercase()), &card_deck, &starting_hands, &combinations, &simulated_hands);
     },
     "loop" => {
       let trigger_path_file = Path::new(&trigger_path);
       loop {
         if trigger_path_file.exists() {
-          let mut input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap();
-          input_hand = input_hand.trim().to_string();
-          let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap();
-          let mut input_action = fs::read_to_string(Path::new(&input_action_path)).unwrap();
-          input_action = input_action.trim().to_string();
+          let input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap().trim().to_string();
+          let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap().to_lowercase();
+          let input_action = fs::read_to_string(Path::new(&input_action_path)).unwrap().trim().to_lowercase();
           fs::remove_file(trigger_path_file).unwrap();
 
           calculcate_hand_ev(&input_hand, &input_pot, &input_action, &card_deck, &starting_hands, &combinations, &simulated_hands);
