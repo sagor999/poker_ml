@@ -57,15 +57,15 @@ while (True):
 
   if changed:
     #print("Detected change")
-    time.sleep(1.0) # wait for animations to finish
+    time.sleep(0.5) # wait for animations to finish
     for i in range(len(scan_areas)):
       im2 = ImageGrab.grab(bbox=scan_areas[i])
       if i==7:
-        im2 = ImageOps.invert(im2) # ocr prefers light background dark text
-        im2.save("ocr/data/ocr.png")
+        inv_im2 = ImageOps.invert(im2) # ocr prefers light background dark text
+        inv_im2.save("ocr/data/ocr.png")
       elif i==8:
-        im2 = ImageOps.invert(im2) # ocr prefers light background dark text
-        im2.save("ocr/data/ocr2.png")
+        inv_im2 = ImageOps.invert(im2) # ocr prefers light background dark text
+        inv_im2.save("ocr/data/ocr2.png")
       else:
         im2.save("card_recognizer_ml/data/test/{}.png".format(i+1))
       prev_scans[i] = im2

@@ -454,7 +454,7 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
 }
 
 fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
-  //let start_main_ts = Instant::now();
+  let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
   //let mut main_pot = 0.0;
   if pot_str.contains("total pot") {
@@ -471,7 +471,14 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
           }
           let (_t, am) = s2.split_at(split_at);
           let am_fixed = am.replace(",", "");
-          total_pot = lexical::parse(am_fixed).unwrap();
+          let total_pot_res = lexical::parse(&am_fixed);
+          total_pot = match total_pot_res {
+            Ok(v) => v,
+            Err(e) => {
+              println!("Failed parsing pot: '{}', err: {:?}", am_fixed, e);
+              0.0
+            },
+          };
         }/* else if pot_name == "main pot" {
           let (_t, am) = s2.split_at(3);
           main_pot = am.parse::<f32>().unwrap();
@@ -488,7 +495,14 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     }
     let (_, amount_str) = action_str.split_at(split_idx);
     let amount_fixed = amount_str.replace(",", "");
-    call_amount = lexical::parse(amount_fixed).unwrap();
+    let call_amount_res = lexical::parse(&amount_fixed);
+    call_amount = match call_amount_res {
+      Ok(v) => v,
+      Err(e) => {
+        println!("Failed parsing call: '{}', err: {:?}", amount_fixed, e);
+        0.0
+      },
+    };
   }
   //println!("{}, {}", total_pot, main_pot);
 
@@ -520,8 +534,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     }*/
 
     println!("hand cards: {:?}, AvgEq: {:.2}%", input_cards, avg_eq*100.0);
-
-  
+    println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);  
     return
   }
   if input_cards.len() < 5 {
@@ -606,7 +619,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
     }
   }
 
-  //let duration_main = start_main_ts.elapsed();
+  let _duration_main = start_main_ts.elapsed();
   //println!("Main duration is: {:?}", duration_main);
 }
 
