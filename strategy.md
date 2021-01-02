@@ -22,3 +22,12 @@ probably stick to 6 for now?
 
 Noticed that I am not playing good in the evening. When I am tired, I tend to gamble and
 do stupid decisions.
+
+Also I need to tighten my range just a tad I feel like, especially 30 min into the game.
+I noticed I get bored and start playing weaker games, then catch a week pair and get way
+too aggressive. 
+I am too aggressive, and quite often put money into pot. 
+Look at the hand, if it is nuts or near to it, then be aggressive, otherwise pair it down I think.
+
+Also, do not think that other player is bluffing or semi bluffing. If someone posts 20+BB raise,
+most probably they have nuts and best option is to fold.
