@@ -353,21 +353,25 @@ fn is_hand_part_of_made_up_hand(hand: &Vec<Card>, hand_rank: &HandRank, combinat
       true
     },
     HandRank::Pair => {
+      let mut res = false;
+      if hand[0].rank == hand[1].rank {
+        res = true;
+      }
       for i in 0..hand.len() {
         for j in 0..community_cards.len() {
           if hand[i].rank == community_cards[j].rank {
-            return true
+            res = true;
           }
         }
       }
-      false
+      res
     },
     HandRank::TwoPairs => {
       let mut num_matched = 0;
       for i in 0..hand.len() {
         for j in 0..community_cards.len() {
           if hand[i].rank == community_cards[j].rank {
-            num_matched = num_matched+1;
+            num_matched += 1;
           }
         }
       }
@@ -378,7 +382,7 @@ fn is_hand_part_of_made_up_hand(hand: &Vec<Card>, hand_rank: &HandRank, combinat
       for i in 0..hand.len() {
         for j in 0..community_cards.len() {
           if hand[i].rank == community_cards[j].rank {
-            num_matched = num_matched+1;
+            num_matched += 1;
           }
         }
       }
@@ -675,8 +679,8 @@ fn main() -> Result<(), Error> {
           let hand_rank = get_best_hand_string(hscore);
           // check if hand is actually part of winning hand
           if is_hand_part_of_made_up_hand(&hand, &hand_rank, &h) {
-            num_hands = num_hands+1;
-            total_eq = total_eq + hequity;
+            num_hands += 1;
+            total_eq += hequity;
             if hequity < min_eq {
               min_eq = hequity;
             }
