@@ -31,3 +31,29 @@ Look at the hand, if it is nuts or near to it, then be aggressive, otherwise pai
 
 Also, do not think that other player is bluffing or semi bluffing. If someone posts 20+BB raise,
 most probably they have nuts and best option is to fold.
+
+
+From the book:
+Optimal strategy is to always bet 41% of the pot. (?)
+
+Preflop:
+Always raise with any position that I intent to enter the pot (never call).
+Raise double BB, or 3 BB when on the button.
+Play very tight range under the gun.
+And get looser as you get to the button. Be quite loose on the button. (need to define).
+
+Need to write down full on strategy to follow.
+Which cards I play on each position.
+
+How I play cards on the flop. 
+And how I bet on each street. 
+To ensure that actions are uniform, and opponent cannot extract information.
+How much to bet? It seems like range is between 1/2 to 3/4 of the pot.
+On the river, it seems like good bet is 1/6 of the pot.
+
+Need to categorize each action into:
+check\fold
+check\call
+check\raise
+call\fold to reraise
+call\re-raise
