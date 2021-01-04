@@ -33,3 +33,12 @@ ocr/data/ocr2.png
 ocr/data/malformed/*
 expected_value/data/input_action
 expected_value/data/input_pot
+card_recognizer_ml/data/model2.tf.data-00000-of-00001
+card_recognizer_ml/data/model2.tf.index
+card_recognizer_ml/data/test/d1.png
+card_recognizer_ml/data/test/d2.png
+card_recognizer_ml/data/test/d3.png
+card_recognizer_ml/data/test/d4.png
+card_recognizer_ml/data/test/d5.png
+card_recognizer_ml/data/test/d6.png
+expected_value/data/input_pos

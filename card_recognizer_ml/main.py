@@ -13,11 +13,11 @@ from tensorflow.keras.models import Sequential
 
 import numpy as np
 
-checkpoint_path = "/data/model1.tf"
+checkpoint_path = "/data/model2.tf"
 checkpoint_dir = os.path.dirname(checkpoint_path)
 
-num_classes = 53
-class_names = ['2c', '2d', '2h', '2s', '3c', '3d', '3h', '3s', '4c', '4d', '4h', '4s', '5c', '5d', '5h', '5s', '6c', '6d', '6h', '6s', '7c', '7d', '7h', '7s', '8c', '8d', '8h', '8s', '9c', '9d', '9h', '9s', 'Ac', 'Ad', 'Ah', 'As', 'Empty', 'Jc', 'Jd', 'Jh', 'Js', 'Kc', 'Kd', 'Kh', 'Ks', 'Qc', 'Qd', 'Qh', 'Qs', 'Tc', 'Td', 'Th', 'Ts']
+num_classes = 54
+class_names = ['2c', '2d', '2h', '2s', '3c', '3d', '3h', '3s', '4c', '4d', '4h', '4s', '5c', '5d', '5h', '5s', '6c', '6d', '6h', '6s', '7c', '7d', '7h', '7s', '8c', '8d', '8h', '8s', '9c', '9d', '9h', '9s', 'Ac', 'Ad', 'Ah', 'As', 'Dealer', 'Empty', 'Jc', 'Jd', 'Jh', 'Js', 'Kc', 'Kd', 'Kh', 'Ks', 'Qc', 'Qd', 'Qh', 'Qs', 'Tc', 'Td', 'Th', 'Ts']
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 batch_size = 32
 img_height = 70
@@ -107,7 +107,7 @@ if Training:
                                                   save_best_only=True)
 
   # train
-  epochs=10000
+  epochs=3000
   history = model.fit(
     train_ds,
     validation_data=val_ds,
@@ -167,5 +167,29 @@ else:
 
       print("{} {} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)],class_names[np.argmax(score7)]))
       sys.stdout.flush()
-    else:
-      time.sleep(0.1)
+    trigger_file = pathlib.Path("/data/trigger2")
+    if trigger_file.is_file():
+      trigger_file.unlink()
+      images = []
+      for i in range(6):
+        img = keras.preprocessing.image.load_img(
+          '/data/test/d{}.png'.format(i+1), target_size=(img_height, img_width)
+        )
+        img_array = keras.preprocessing.image.img_to_array(img)
+        img_array = tf.expand_dims(img_array, 0) # Create a batch
+        images.append(img_array)
+      
+      images = np.vstack(images)
+      predictions = model.predict(images)
+      score1 = tf.nn.softmax(predictions[0])
+      score2 = tf.nn.softmax(predictions[1])
+      score3 = tf.nn.softmax(predictions[2])
+      score4 = tf.nn.softmax(predictions[3])
+      score5 = tf.nn.softmax(predictions[4])
+      score6 = tf.nn.softmax(predictions[5])
+
+      print("{} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)]))
+      sys.stdout.flush()
+    
+    
+    time.sleep(0.1)
