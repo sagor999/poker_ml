@@ -37,15 +37,17 @@ enum TablePosition {
   Mid = 1,
   Late = 2,
   Button = 3,
+  SB = 4,
 }
 
 impl fmt::Display for TablePosition {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      TablePosition::Early => write!(f, "early"),
-      TablePosition::Mid => write!(f, "mid"),
-      TablePosition::Late => write!(f, "late"),
-      TablePosition::Button => write!(f, "button"),
+      TablePosition::Early => write!(f, "UTG"),
+      TablePosition::Mid => write!(f, "MID"),
+      TablePosition::Late => write!(f, "LATE"),
+      TablePosition::Button => write!(f, "BTN"),
+      TablePosition::SB => write!(f, "SB"),
     }
   }
 }
@@ -53,10 +55,11 @@ impl fmt::Display for TablePosition {
 impl fmt::Debug for TablePosition {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      TablePosition::Early => write!(f, "early"),
-      TablePosition::Mid => write!(f, "mid"),
-      TablePosition::Late => write!(f, "late"),
-      TablePosition::Button => write!(f, "button"),
+      TablePosition::Early => write!(f, "UTG"),
+      TablePosition::Mid => write!(f, "MID"),
+      TablePosition::Late => write!(f, "LATE"),
+      TablePosition::Button => write!(f, "BTN"),
+      TablePosition::SB => write!(f, "SB"),
     }
   }
 }
@@ -670,6 +673,14 @@ fn is_late_position_range(hand: &Vec<Card>) -> bool {
   if hand[1].rank == 7 && hand[1].suit == hand[0].suit && hand[0].rank == 5 {
     return true
   }
+  // 33
+  if hand[1].rank == 3 && hand[0].rank == 3 {
+    return true
+  }
+  // 22
+  if hand[1].rank == 2 && hand[0].rank == 2 {
+    return true
+  }
 
   return false
 }
@@ -720,6 +731,90 @@ fn is_btn_position_range(hand: &Vec<Card>) -> bool {
   }
   // A8o, A7o, A6o, A5o, A4o
   if hand[1].rank == 14 && hand[0].rank >= 4 && hand[0].rank <= 8 {
+    return true
+  }
+
+  return false
+}
+
+fn is_sb_position_range(hand: &Vec<Card>) -> bool {
+  if is_btn_position_range(hand) {
+    return true
+  }
+  // Q4s, Q3s, Q2s
+  if hand[1].rank == 12 && hand[1].suit == hand[0].suit && hand[0].rank >= 2 && hand[0].rank <= 4 {
+    return true
+  }
+  // J6s, J5s, J4s, J3s, J2s
+  if hand[1].rank == 11 && hand[1].suit == hand[0].suit && hand[0].rank >= 2 && hand[0].rank <= 6 {
+    return true
+  }
+  // T5s, T4s, T3s, T2s
+  if hand[1].rank == 10 && hand[1].suit == hand[0].suit && hand[0].rank >= 2 && hand[0].rank <= 5 {
+    return true
+  }
+  // 95s
+  if hand[1].rank == 9 && hand[1].suit == hand[0].suit && hand[0].rank == 5 {
+    return true
+  }
+  // 94s
+  if hand[1].rank == 9 && hand[1].suit == hand[0].suit && hand[0].rank == 4 {
+    return true
+  }
+  // 84s
+  if hand[1].rank == 8 && hand[1].suit == hand[0].suit && hand[0].rank == 4 {
+    return true
+  }
+  // 74s, 73s
+  if hand[1].rank == 7 && hand[1].suit == hand[0].suit && hand[0].rank >= 3 && hand[0].rank <= 4 {
+    return true
+  }
+  // 63s
+  if hand[1].rank == 6 && hand[1].suit == hand[0].suit && hand[0].rank == 3 {
+    return true
+  }
+  // 52s
+  if hand[1].rank == 5 && hand[1].suit == hand[0].suit && hand[0].rank == 2 {
+    return true
+  }
+  // 42s
+  if hand[1].rank == 4 && hand[1].suit == hand[0].suit && hand[0].rank == 2 {
+    return true
+  }
+  // 32s
+  if hand[1].rank == 3 && hand[1].suit == hand[0].suit && hand[0].rank == 2 {
+    return true
+  }
+  // K8o, Q8o, J8o, T8o
+  if hand[0].rank == 8 && hand[1].rank >= 10 && hand[1].rank <= 13 {
+    return true
+  }
+  // K7o, Q7o, J7o, T7o, 97o, 87o
+  if hand[0].rank == 7 && hand[1].rank >= 8 && hand[1].rank <= 13 {
+    return true
+  }
+  // K6o, K5o, K4o
+  if hand[1].rank == 13 && hand[0].rank >= 4 && hand[0].rank <= 6 {
+    return true
+  }
+  // Q6o, Q5o
+  if hand[1].rank == 12 && hand[0].rank >= 4 && hand[0].rank <= 5 {
+    return true
+  }
+  // A3o, A2o
+  if hand[1].rank == 14 && hand[0].rank >= 2 && hand[0].rank <= 3 {
+    return true
+  }
+  // 86o, 76o
+  if hand[0].rank == 6 && hand[1].rank >= 7 && hand[1].rank <= 8 {
+    return true
+  }
+  // 75o, 65o
+  if hand[0].rank == 5 && hand[1].rank >= 6 && hand[1].rank <= 7 {
+    return true
+  }
+  // 64o, 54o
+  if hand[0].rank == 4 && hand[1].rank >= 5 && hand[1].rank <= 6 {
     return true
   }
 
@@ -803,7 +898,8 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
     1 => my_position = TablePosition::Button,
     2 => my_position = TablePosition::Late,
     3 => my_position = TablePosition::Mid,
-    4|5|6 => my_position = TablePosition::Early,
+    4|5 => my_position = TablePosition::Early,
+    6 => my_position = TablePosition::SB,
     _ => panic!("unknown dealer_pos: {}", dealer_pos),
   }
 
@@ -835,19 +931,11 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
     }*/
 
     let playable_range = match my_position {
-      TablePosition::Early => {
-        is_early_position_range(&input_cards)
-      },
-      TablePosition::Mid => {
-        is_mid_position_range(&input_cards)
-
-      },
-      TablePosition::Late => {
-        is_late_position_range(&input_cards)
-      },
-      TablePosition::Button => {
-        is_btn_position_range(&input_cards)
-      },
+      TablePosition::Early => is_early_position_range(&input_cards),
+      TablePosition::Mid => is_mid_position_range(&input_cards),
+      TablePosition::Late => is_late_position_range(&input_cards),
+      TablePosition::Button => is_btn_position_range(&input_cards),
+      TablePosition::SB => is_sb_position_range(&input_cards),
     };
     let is_playable_str = match playable_range {
       true => "PLAYABLE",
@@ -875,7 +963,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
   println!("hand cards: {:?}", hand);
   println!("community cards: {:?}", community);
   println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
-  println!("Position: {}", my_position);  
+  //println!("Position: {}", my_position);  
 
   let mut all_cards = Vec::<Card>::new();
   all_cards.extend(hand.to_vec().iter());
