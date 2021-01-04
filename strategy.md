@@ -57,3 +57,26 @@ check\call
 check\raise
 call\fold to reraise
 call\re-raise
+
+
+
+
+Pre-flop:
+if starting hand is within playable range:
+raise 2BB (micro stakes: 3BB), and 3BB (micro: 4BB) if on btn.
+if someone raises even more after me, call. don't fold. 
+If someone calls this amount before me, then just limp in.
+
+Flop:
+If in early position or limped in -> check\call. check\fold if did not connect with the board. no bluff.
+If I was an aggressor in pre-flop ->
+  if in early position -> check\raise.
+  in late position -> raise 1/2 pot.
+
+Turn:
+if I have nuts -> keep calling\raising 1/2 pot. 
+If I have a draw and raised in pre-flop -> check to get free card. 
+If I did not connect with anything and get raised -> fold.
+
+River:
+If I "think" I have nuts\strong -> call\raise 1/2 pot. ONLY go all in if I absolutely have the best card possible or close to it. (99% equity).
