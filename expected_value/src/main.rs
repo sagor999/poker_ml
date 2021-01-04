@@ -21,6 +21,46 @@ use rand::{RngCore, Rng, SeedableRng};
 use rand_chacha::{ChaCha20Core,ChaCha20Rng};
 use csv::Writer;
 
+// for 6 player table:
+// SB, BB, UTG - Early
+// 4th pos = Mid
+// 5th pos = Late
+// 6th pos = Button
+// for 9 player table:
+// SB, BB, UTG - Early
+// 4,5,6 - Mid
+// 7, 8 - Late
+// 9 - Button
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+enum TablePosition {
+  Early = 0,
+  Mid = 1,
+  Late = 2,
+  Button = 3,
+}
+
+impl fmt::Display for TablePosition {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      TablePosition::Early => write!(f, "early"),
+      TablePosition::Mid => write!(f, "mid"),
+      TablePosition::Late => write!(f, "late"),
+      TablePosition::Button => write!(f, "button"),
+    }
+  }
+}
+
+impl fmt::Debug for TablePosition {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      TablePosition::Early => write!(f, "early"),
+      TablePosition::Mid => write!(f, "mid"),
+      TablePosition::Late => write!(f, "late"),
+      TablePosition::Button => write!(f, "button"),
+    }
+  }
+}
+
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 enum CardSuit {
   Heart = 1,
@@ -31,23 +71,23 @@ enum CardSuit {
 
 impl fmt::Display for CardSuit {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-      match self {
-        CardSuit::Heart => write!(f, "h"),
-        CardSuit::Spade => write!(f, "s"),
-        CardSuit::Club => write!(f, "c"),
-        CardSuit::Diamond => write!(f, "d"),
-      }
+    match self {
+      CardSuit::Heart => write!(f, "h"),
+      CardSuit::Spade => write!(f, "s"),
+      CardSuit::Club => write!(f, "c"),
+      CardSuit::Diamond => write!(f, "d"),
+    }
   }
 }
 
 impl fmt::Debug for CardSuit {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-      match self {
-        CardSuit::Heart => write!(f, "h"),
-        CardSuit::Spade => write!(f, "s"),
-        CardSuit::Club => write!(f, "c"),
-        CardSuit::Diamond => write!(f, "d"),
-      }
+    match self {
+      CardSuit::Heart => write!(f, "h"),
+      CardSuit::Spade => write!(f, "s"),
+      CardSuit::Club => write!(f, "c"),
+      CardSuit::Diamond => write!(f, "d"),
+    }
   }
 }
 
@@ -272,6 +312,10 @@ fn conv_string_to_cards(s: &str) -> Vec<Card> {
     if p == "Empty" {
       continue;
     }
+    if p == "Dealer" {
+      println!("Detected incorrect card input: {}", s);
+      continue;
+    }
     let card = p.parse::<Card>().unwrap();
     res.push(card);
   }
@@ -457,7 +501,232 @@ fn get_best_hand(my_hand: &Vec<Card>, community: &Vec<Card>, combinations: &Hash
   return (highest_value, equity, get_best_hand_string(highest_value), assembled_hand)
 }
 
-fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
+fn is_early_position_range(hand: &Vec<Card>) -> bool {
+  // hand is sorted from smaller card first, to larger card last
+
+  // AKs, AQs, AJs, ATs, A9s, A8s, A7s, A6s, A5s, A4s, A3s, A2s
+  if hand[1].rank==14 && hand[0].suit == hand[1].suit {
+    return true
+  }
+  // AA
+  if hand[0].rank == 14 && hand[1].rank == 14 {
+    return true
+  }
+  // KQs, KJs, KTs
+  if hand[1].rank == 13 && hand[0].suit == hand[1].suit && hand[0].rank >= 10 && hand[0].rank <= 12 {
+    return true
+  }
+  // KK
+  if hand[0].rank == 13 && hand[1].rank == 13 {
+    return true
+  }
+  // AKo
+  if hand[1].rank == 13 && hand[1].rank == 14 {
+    return true
+  }
+  // QJs, QTs
+  if hand[1].rank == 12 && hand[0].suit == hand[1].suit && hand[0].rank >= 10 && hand[0].rank <= 11 {
+    return true
+  }
+  // QQ
+  if hand[0].rank == 12 && hand[1].rank == 12 {
+    return true
+  }
+  // AQo
+  if hand[1].rank == 14 && hand[1].rank == 12 {
+    return true
+  }
+  // KQo
+  if hand[1].rank == 13 && hand[1].rank == 12 {
+    return true
+  }
+  // JTs
+  if hand[1].rank == 11 && hand[0].rank == 10 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // JJ
+  if hand[1].rank == 11 && hand[0].rank == 11 {
+    return true
+  }
+  // AJo
+  if hand[1].rank == 14 && hand[0].rank == 11 {
+    return true
+  }
+  // TT
+  if hand[1].rank == 10 && hand[0].rank == 10 {
+    return true
+  }
+  // T9s
+  if hand[1].rank == 10 && hand[0].rank == 9 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // ATo
+  if hand[1].rank == 14 && hand[0].rank == 10 {
+    return true
+  }
+  // 99, 88, 77, 66, 55
+  if hand[1].rank == hand[0].rank && hand[1].rank >= 5 && hand[1].rank <= 9 {
+    return true
+  }
+  // 65s
+  if hand[1].rank == 6 && hand[0].rank == 5 && hand[0].suit == hand[1].suit {
+    return true
+  }
+
+  return false
+}
+
+fn is_mid_position_range(hand: &Vec<Card>) -> bool {
+  if is_early_position_range(hand) {
+    return true
+  }
+
+  // K9s, K8s
+  if hand[1].rank == 13 && hand[1].suit == hand[0].suit && hand[0].rank >= 8 && hand[0].rank <= 9 {
+    return true
+  }
+  // Q9s
+  if hand[1].rank == 12 && hand[1].suit == hand[0].suit && hand[0].rank == 9 {
+    return true
+  }
+  // J9s
+  if hand[1].rank == 11 && hand[1].suit == hand[0].suit && hand[0].rank == 9 {
+    return true
+  }
+  // KJo
+  if hand[1].rank == 13 && hand[0].rank == 11 {
+    return true
+  }
+  // QJo
+  if hand[1].rank == 12 && hand[0].rank == 11 {
+    return true
+  }
+  // 98s
+  if hand[1].rank == 9 && hand[0].rank == 8 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // 87s
+  if hand[1].rank == 8 && hand[0].rank == 7 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // 76s
+  if hand[1].rank == 7 && hand[0].rank == 6 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // 54s
+  if hand[1].rank == 5 && hand[0].rank == 4 && hand[1].suit == hand[0].suit {
+    return true
+  }
+  // 44
+  if hand[1].rank == 4 && hand[0].rank == 4 {
+    return true
+  }
+
+  return false
+}
+
+fn is_late_position_range(hand: &Vec<Card>) -> bool {
+  if is_mid_position_range(hand) {
+    return true
+  }
+
+  // K7s, K6s, K5s
+  if hand[1].rank == 13 && hand[1].suit == hand[0].suit && hand[0].rank >= 5 && hand[0].rank <= 7 {
+    return true
+  }
+  // Q8s
+  if hand[1].rank == 12 && hand[1].suit == hand[0].suit && hand[0].rank == 8 {
+    return true
+  }
+  // J8s
+  if hand[1].rank == 11 && hand[1].suit == hand[0].suit && hand[0].rank == 8 {
+    return true
+  }
+  // T8s
+  if hand[1].rank == 10 && hand[1].suit == hand[0].suit && hand[0].rank == 8 {
+    return true
+  }
+  // KTo
+  if hand[1].rank == 13 && hand[0].rank == 10 {
+    return true
+  }
+  // QTo
+  if hand[1].rank == 12 && hand[0].rank == 10 {
+    return true
+  }
+  // JTo
+  if hand[1].rank == 11 && hand[0].rank == 10 {
+    return true
+  }
+  // 97s
+  if hand[1].rank == 9 && hand[1].suit == hand[0].suit && hand[0].rank == 7 {
+    return true
+  }
+  // 86s
+  if hand[1].rank == 8 && hand[1].suit == hand[0].suit && hand[0].rank == 6 {
+    return true
+  }
+  // 75s
+  if hand[1].rank == 7 && hand[1].suit == hand[0].suit && hand[0].rank == 5 {
+    return true
+  }
+
+  return false
+}
+
+fn is_btn_position_range(hand: &Vec<Card>) -> bool {
+  if is_late_position_range(hand) {
+    return true
+  }
+  // K4s, K3s, K2s
+  if hand[1].rank == 13 && hand[1].suit == hand[0].suit && hand[0].rank >= 2 && hand[0].rank <= 4 {
+    return true
+  }
+  // Q7s, Q6s, Q5s
+  if hand[1].rank == 12 && hand[1].suit == hand[0].suit && hand[0].rank >= 5 && hand[0].rank <= 7 {
+    return true
+  }
+  // J7s
+  if hand[1].rank == 11 && hand[1].suit == hand[0].suit && hand[0].rank == 7 {
+    return true
+  }
+  // T7s, T6s
+  if hand[1].rank == 10 && hand[1].suit == hand[0].suit && hand[0].rank >= 6 && hand[0].rank <= 7 {
+    return true
+  }
+  // 96s
+  if hand[1].rank == 9 && hand[1].suit == hand[0].suit && hand[0].rank == 6 {
+    return true
+  }
+  // 85s
+  if hand[1].rank == 8 && hand[1].suit == hand[0].suit && hand[0].rank == 5 {
+    return true
+  }
+  // 64s
+  if hand[1].rank == 6 && hand[1].suit == hand[0].suit && hand[0].rank == 4 {
+    return true
+  }
+  // 53s
+  if hand[1].rank == 5 && hand[1].suit == hand[0].suit && hand[0].rank == 3 {
+    return true
+  }
+  // 43s
+  if hand[1].rank == 4 && hand[1].suit == hand[0].suit && hand[0].rank == 3 {
+    return true
+  }
+  // A9o, K9o, Q9o, J9o, T9o
+  if hand[0].rank == 9 && hand[1].rank >= 10 && hand[1].rank <= 14 {
+    return true
+  }
+  // A8o, A7o, A6o, A5o, A4o
+  if hand[1].rank == 14 && hand[0].rank >= 4 && hand[0].rank <= 8 {
+    return true
+  }
+
+  return false
+}
+
+fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &str, card_deck: &Vec<Card>, starting_hands: &HashMap<Vec<Card>, (f32,f32,f32)>, combinations: &HashMap<Vec<Card>, (f32,f32)>, _simulated_hands: &HashMap::<Vec<Card>, (u64, u64, HashMap<HandRank, u64>, u64, u64, u64)>) {
   let start_main_ts = Instant::now();
   let mut total_pot = 0.0;
   //let mut main_pot = 0.0;
@@ -510,6 +779,34 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
   }
   //println!("{}, {}", total_pot, main_pot);
 
+  let dealer_pos_arr: Vec<&str> = pos_str.split(' ').collect();
+  if dealer_pos_arr.len() != 6 && dealer_pos_arr.len() != 9 {
+    println!("Malformed dealer position: {}", pos_str);
+    return
+  }
+  let mut dealer_pos = 0;
+  for i in 0..dealer_pos_arr.len() {
+    if dealer_pos_arr[i].to_lowercase() == "dealer" {
+      dealer_pos = i+1;
+      break;
+    } else if dealer_pos_arr[i].to_lowercase() != "empty" {
+      println!("Unknown dealer string found: {}", pos_str);
+      return
+    }
+  }
+  if dealer_pos == 0 {
+    println!("Couldn't find dealer position: {}", pos_str);
+    return
+  }
+  let my_position;
+  match dealer_pos {
+    1 => my_position = TablePosition::Button,
+    2 => my_position = TablePosition::Late,
+    3 => my_position = TablePosition::Mid,
+    4|5|6 => my_position = TablePosition::Early,
+    _ => panic!("unknown dealer_pos: {}", dealer_pos),
+  }
+
   let mut input_cards = conv_string_to_cards(&input);
 
   // check that input cards don't have duplicates in case if ML messed up recognizing cards
@@ -537,8 +834,28 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
       //println!("SimData: {:?} - win: {:.2}%, flop: {:.2}% turn: {:.2}% river: {:.2}%", input_cards, win_ch*100.0, (won_flop as f64/num_won as f64)*100.0, (won_turn as f64/num_won as f64)*100.0, (won_river as f64/num_won as f64)*100.0);
     }*/
 
-    println!("hand cards: {:?}, AvgEq: {:.2}%", input_cards, avg_eq*100.0);
-    println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);  
+    let playable_range = match my_position {
+      TablePosition::Early => {
+        is_early_position_range(&input_cards)
+      },
+      TablePosition::Mid => {
+        is_mid_position_range(&input_cards)
+
+      },
+      TablePosition::Late => {
+        is_late_position_range(&input_cards)
+      },
+      TablePosition::Button => {
+        is_btn_position_range(&input_cards)
+      },
+    };
+    let is_playable_str = match playable_range {
+      true => "PLAYABLE",
+      false => "FOLD",
+    };
+    println!("hand cards: {:?}, AvgEq: {:.2}%, Playable: {}", input_cards, avg_eq*100.0, is_playable_str);
+    println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
+    println!("Position: {}", my_position);
     return
   }
   if input_cards.len() < 5 {
@@ -558,6 +875,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, card_deck: &
   println!("hand cards: {:?}", hand);
   println!("community cards: {:?}", community);
   println!("Pot: ${:.2}, To Call: ${:.2}", total_pot, call_amount);
+  println!("Position: {}", my_position);  
 
   let mut all_cards = Vec::<Card>::new();
   all_cards.extend(hand.to_vec().iter());
@@ -635,6 +953,7 @@ fn main() -> Result<(), Error> {
   let hands_csv_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/hands.csv".to_string();
   let trigger_path: String =        "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/trigger".to_string();
   let input_hand_path: String =     "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_hand".to_string();
+  let input_pos_path: String =     "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_pos".to_string();
   let input_pot_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_pot".to_string();
   let input_action_path: String =      "/home/pavel/nvme/GitHub/poker_ml/expected_value/data/input_action".to_string();
 
@@ -749,23 +1068,24 @@ fn main() -> Result<(), Error> {
   let mode: &str = &(args[1]);
   match mode {
     "once" => {
-      if args.len() != 5 {
+      if args.len() != 6 {
         panic!("Not enough arguments provided. Expecting mode input_hand pot, got: {}", args.len());
       }
       // example hand input: "C8 H5 H7 D12 D6"
       // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
-      calculcate_hand_ev(&(args[2]), &(args[3].to_lowercase()), &(args[4].to_lowercase()), &card_deck, &starting_hands, &combinations, &simulated_hands);
+      calculcate_hand_ev(&(args[2]), &(args[3].to_lowercase()), &(args[4].to_lowercase()), &(args[5]), &card_deck, &starting_hands, &combinations, &simulated_hands);
     },
     "loop" => {
       let trigger_path_file = Path::new(&trigger_path);
       loop {
         if trigger_path_file.exists() {
           let input_hand = fs::read_to_string(Path::new(&input_hand_path)).unwrap().trim().to_string();
+          let input_pos = fs::read_to_string(Path::new(&input_pos_path)).unwrap().trim().to_string();
           let input_pot = fs::read_to_string(Path::new(&input_pot_path)).unwrap().to_lowercase();
           let input_action = fs::read_to_string(Path::new(&input_action_path)).unwrap().trim().to_lowercase();
           fs::remove_file(trigger_path_file).unwrap();
 
-          calculcate_hand_ev(&input_hand, &input_pot, &input_action, &card_deck, &starting_hands, &combinations, &simulated_hands);
+          calculcate_hand_ev(&input_hand, &input_pot, &input_action, &input_pos, &card_deck, &starting_hands, &combinations, &simulated_hands);
           println!("END");
         } else {
           let sleep_amount = Duration::from_millis(100);
