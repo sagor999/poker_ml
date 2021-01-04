@@ -65,7 +65,8 @@ Pre-flop:
 if starting hand is within playable range:
 raise 2BB (micro stakes: 3BB), and 3BB (micro: 4BB) if on btn.
 if someone raises even more after me, call. don't fold. 
-If someone calls this amount before me, then just limp in.
+If someone calls this amount before me, then just limp in (if my hand is strong.
+if it is weak, then fold, don't limp in).
 
 Flop:
 If in early position or limped in -> check\call. check\fold if did not connect with the board. no bluff.
