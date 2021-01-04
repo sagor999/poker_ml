@@ -24,6 +24,14 @@ rive1 = (2144,434)
 pot   = (1935,356)
 action= (1980,738)
 
+# pos1 is myself. counter clockwise for other players
+pos1 = (2066,569)
+pos2 = (1718,580)
+pos3 = (1718,356)
+pos4 = (2088,269)
+pos5 = (2271,350)
+pos6 = (2271,584)
+
 scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h), 
               (hand2[0], hand2[1], hand2[0]+hand_w, hand2[1]+hand_h), 
               (flop1[0], flop1[1], flop1[0]+card_w, flop1[1]+card_h), 
@@ -35,14 +43,26 @@ scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h),
               (action[0], action[1], action[0]+action_w, action[1]+action_h),]
 prev_scans = []
 
+dealer_scan_areas = [ (pos1[0], pos1[1], pos1[0]+hand_w, pos1[1]+hand_h), 
+                      (pos2[0], pos2[1], pos2[0]+hand_w, pos2[1]+hand_h), 
+                      (pos3[0], pos3[1], pos3[0]+hand_w, pos3[1]+hand_h), 
+                      (pos4[0], pos4[1], pos4[0]+hand_w, pos4[1]+hand_h), 
+                      (pos5[0], pos5[1], pos5[0]+hand_w, pos5[1]+hand_h), 
+                      (pos6[0], pos6[1], pos6[0]+hand_w, pos6[1]+hand_h)
+                    ]
+prev_dealer_scans = []
+
 for i in range(len(scan_areas)):
   prev_scans.append(ImageGrab.grab(bbox=scan_areas[i]))
+for i in range(len(dealer_scan_areas)):
+  prev_dealer_scans.append(ImageGrab.grab(bbox=dealer_scan_areas[i]))
 
 card_ml_stream = os.popen('docker exec card_ml python /src/main.py')
 ocr_stream = os.popen('docker exec ocr python3 /src/ocr.py')
 ev_stream = os.popen('expected_value/target/release/poker_ev loop')
 
 prev_ml_output = ""
+prev_ml_output2 = ""
 prev_ocr_output = ""
 prev_ocr_output2 = ""
 while (True):
@@ -54,10 +74,15 @@ while (True):
     if ImageChops.difference(prev_scans[i], im2).getbbox() is not None:
       changed = True
       break
+  for i in range(len(dealer_scan_areas)):
+    im2 = ImageGrab.grab(bbox=dealer_scan_areas[i])
+    if ImageChops.difference(prev_dealer_scans[i], im2).getbbox() is not None:
+      changed = True
+      break
 
   if changed:
     #print("Detected change")
-    time.sleep(0.5) # wait for animations to finish
+    time.sleep(1.0) # wait for animations to finish
     for i in range(len(scan_areas)):
       im2 = ImageGrab.grab(bbox=scan_areas[i])
       if i==7:
@@ -70,11 +95,20 @@ while (True):
         im2.save("card_recognizer_ml/data/test/{}.png".format(i+1))
       prev_scans[i] = im2
 
+    for i in range(len(dealer_scan_areas)):
+      im2 = ImageGrab.grab(bbox=dealer_scan_areas[i])
+      im2.save("card_recognizer_ml/data/test/d{}.png".format(i+1))
+      prev_dealer_scans[i] = im2
+
     os.system("touch card_recognizer_ml/data/trigger")
     #print("Touched trigger. Waiting for ML")
     card_ml_output = card_ml_stream.readline()
     card_ml_output = card_ml_output.rstrip('\n')
     #print("ML output: ", card_ml_output)
+
+    os.system("touch card_recognizer_ml/data/trigger2")
+    card_ml_output2 = card_ml_stream.readline()
+    card_ml_output2 = card_ml_output2.rstrip('\n')
 
     os.system("touch ocr/data/trigger")
     ocr_output = ""
@@ -95,8 +129,9 @@ while (True):
     #print("OCR: ", ocr_output)
     #print("end ocr")
 
-    if prev_ml_output != card_ml_output or prev_ocr_output != ocr_output or prev_ocr_output2 != ocr_output2:
+    if prev_ml_output != card_ml_output or prev_ml_output2 != card_ml_output2 or prev_ocr_output != ocr_output or prev_ocr_output2 != ocr_output2:
       prev_ml_output = card_ml_output
+      prev_ml_output2 = card_ml_output2
       prev_ocr_output = ocr_output
       prev_ocr_output2 = ocr_output2
 
@@ -109,6 +144,8 @@ while (True):
 
       with open("expected_value/data/input_hand", "w") as input_hand_file:
         print("{}".format(card_ml_output), file=input_hand_file)
+      with open("expected_value/data/input_pos", "w") as input_pos_file:
+        print("{}".format(card_ml_output2), file=input_pos_file)
       with open("expected_value/data/input_pot", "w") as input_pot_file:
         print("{}".format(ocr_output), file=input_pot_file)
       with open("expected_value/data/input_action", "w") as input_action_file:
