@@ -524,7 +524,7 @@ fn is_early_position_range(hand: &Vec<Card>) -> bool {
     return true
   }
   // AKo
-  if hand[1].rank == 13 && hand[1].rank == 14 {
+  if hand[1].rank == 14 && hand[0].rank == 13 {
     return true
   }
   // QJs, QTs
@@ -536,11 +536,11 @@ fn is_early_position_range(hand: &Vec<Card>) -> bool {
     return true
   }
   // AQo
-  if hand[1].rank == 14 && hand[1].rank == 12 {
+  if hand[1].rank == 14 && hand[0].rank == 12 {
     return true
   }
   // KQo
-  if hand[1].rank == 13 && hand[1].rank == 12 {
+  if hand[1].rank == 13 && hand[0].rank == 12 {
     return true
   }
   // JTs
