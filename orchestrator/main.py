@@ -25,12 +25,18 @@ pot   = (1935,356)
 action= (1980,738)
 
 # pos1 is myself. counter clockwise for other players
+# 6 pl table
 pos1 = (2066,569)
 pos2 = (1718,580)
 pos3 = (1718,356)
 pos4 = (2088,269)
 pos5 = (2271,350)
 pos6 = (2271,584)
+# 3 pl table (Jackpot Sit & Go)
+#pos1 = (2062,572)
+#pos2 = (1701,356)
+#pos3 = (2285,350)
+
 
 scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h), 
               (hand2[0], hand2[1], hand2[0]+hand_w, hand2[1]+hand_h), 
@@ -43,6 +49,7 @@ scan_areas = [(hand1[0], hand1[1], hand1[0]+hand_w, hand1[1]+hand_h),
               (action[0], action[1], action[0]+action_w, action[1]+action_h),]
 prev_scans = []
 
+# 6 pl table
 dealer_scan_areas = [ (pos1[0], pos1[1], pos1[0]+hand_w, pos1[1]+hand_h), 
                       (pos2[0], pos2[1], pos2[0]+hand_w, pos2[1]+hand_h), 
                       (pos3[0], pos3[1], pos3[0]+hand_w, pos3[1]+hand_h), 
@@ -50,6 +57,18 @@ dealer_scan_areas = [ (pos1[0], pos1[1], pos1[0]+hand_w, pos1[1]+hand_h),
                       (pos5[0], pos5[1], pos5[0]+hand_w, pos5[1]+hand_h), 
                       (pos6[0], pos6[1], pos6[0]+hand_w, pos6[1]+hand_h)
                     ]
+
+# 3 pl table
+#dealer_scan_areas = [ (pos1[0], pos1[1], pos1[0]+hand_w, pos1[1]+hand_h), 
+#                      (pos2[0], pos2[1], pos2[0]+hand_w, pos2[1]+hand_h), 
+#                      (pos3[0], pos3[1], pos3[0]+hand_w, pos3[1]+hand_h), 
+#                    ]
+
+# 6 pl table
+dealer_trigger_file = "trigger2_6"
+# 3 pl table
+#dealer_trigger_file = "trigger2_3"
+
 prev_dealer_scans = []
 
 for i in range(len(scan_areas)):
@@ -106,7 +125,7 @@ while (True):
     card_ml_output = card_ml_output.rstrip('\n')
     #print("ML output: ", card_ml_output)
 
-    os.system("touch card_recognizer_ml/data/trigger2")
+    os.system("touch card_recognizer_ml/data/{}".format(dealer_trigger_file))
     card_ml_output2 = card_ml_stream.readline()
     card_ml_output2 = card_ml_output2.rstrip('\n')
 

@@ -167,7 +167,7 @@ else:
 
       print("{} {} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)],class_names[np.argmax(score7)]))
       sys.stdout.flush()
-    trigger_file = pathlib.Path("/data/trigger2")
+    trigger_file = pathlib.Path("/data/trigger2_6")
     if trigger_file.is_file():
       trigger_file.unlink()
       images = []
@@ -189,6 +189,27 @@ else:
       score6 = tf.nn.softmax(predictions[5])
 
       print("{} {} {} {} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)],class_names[np.argmax(score4)],class_names[np.argmax(score5)],class_names[np.argmax(score6)]))
+      sys.stdout.flush()
+    
+    trigger_file = pathlib.Path("/data/trigger2_3")
+    if trigger_file.is_file():
+      trigger_file.unlink()
+      images = []
+      for i in range(3):
+        img = keras.preprocessing.image.load_img(
+          '/data/test/d{}.png'.format(i+1), target_size=(img_height, img_width)
+        )
+        img_array = keras.preprocessing.image.img_to_array(img)
+        img_array = tf.expand_dims(img_array, 0) # Create a batch
+        images.append(img_array)
+      
+      images = np.vstack(images)
+      predictions = model.predict(images)
+      score1 = tf.nn.softmax(predictions[0])
+      score2 = tf.nn.softmax(predictions[1])
+      score3 = tf.nn.softmax(predictions[2])
+
+      print("{} {} {}".format(class_names[np.argmax(score1)],class_names[np.argmax(score2)],class_names[np.argmax(score3)]))
       sys.stdout.flush()
     
     

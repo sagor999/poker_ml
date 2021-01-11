@@ -875,7 +875,7 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
   //println!("{}, {}", total_pot, main_pot);
 
   let dealer_pos_arr: Vec<&str> = pos_str.split(' ').collect();
-  if dealer_pos_arr.len() != 6 && dealer_pos_arr.len() != 9 {
+  if dealer_pos_arr.len() != 3 && dealer_pos_arr.len() != 6 && dealer_pos_arr.len() != 9 {
     println!("Malformed dealer position: {}", pos_str);
     return
   }
@@ -894,13 +894,22 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
     return
   }
   let my_position;
-  match dealer_pos {
-    1 => my_position = TablePosition::Button,
-    2 => my_position = TablePosition::Late,
-    3 => my_position = TablePosition::Mid,
-    4|5 => my_position = TablePosition::Early,
-    6 => my_position = TablePosition::SB,
-    _ => panic!("unknown dealer_pos: {}", dealer_pos),
+  if dealer_pos_arr.len() == 3 {
+    match dealer_pos {
+      1 => my_position = TablePosition::Button,
+      2 => my_position = TablePosition::Late,
+      3 => my_position = TablePosition::SB,
+      _ => panic!("unknown dealer_pos: {}", dealer_pos),
+    }
+  } else {
+    match dealer_pos {
+      1 => my_position = TablePosition::Button,
+      2 => my_position = TablePosition::Late,
+      3 => my_position = TablePosition::Mid,
+      4|5 => my_position = TablePosition::Early,
+      6 => my_position = TablePosition::SB,
+      _ => panic!("unknown dealer_pos: {}", dealer_pos),
+    }
   }
 
   let mut input_cards = conv_string_to_cards(&input);
@@ -1002,12 +1011,17 @@ fn calculcate_hand_ev(input: &str, pot_str: &str, action_str: &str, pos_str: &st
     let ev = calculate_ev(total_pot, call_amount*2.0, real_my_hand_eq);
     println!("RAISE ${:.2}: {:+.2}", call_amount*2.0, ev);
   } else {
-    let ev = calculate_ev(total_pot, total_pot*0.5, real_my_hand_eq);
+    // for limit $1\2 table:
+    let ev = calculate_ev(total_pot, 1.0, real_my_hand_eq);
+    println!("RAISE ${:.2}: {:+.2}", 1.0, ev);
+    let ev = calculate_ev(total_pot, 2.0, real_my_hand_eq);
+    println!("RAISE ${:.2}: {:+.2}", 2.0, ev);
+    /*let ev = calculate_ev(total_pot, total_pot*0.5, real_my_hand_eq);
     println!("RAISE(1/2) ${:.2}: {:+.2}", total_pot*0.5, ev);
     let ev = calculate_ev(total_pot, total_pot*0.75, real_my_hand_eq);
     println!("RAISE(3/4) ${:.2}: {:+.2}", total_pot*0.75, ev);
     let ev = calculate_ev(total_pot, total_pot, real_my_hand_eq);
-    println!("RAISE(pot) ${:.2}: {:+.2}", total_pot, ev);
+    println!("RAISE(pot) ${:.2}: {:+.2}", total_pot, ev);*/
   }
   let mut sorted_keys: Vec<&HandRank> = improved_hands_hash_map.keys().collect();
   sorted_keys.sort();
