@@ -3,8 +3,8 @@ import time
 import os
 import subprocess
 
-#hard coded for now
-# 7 bboxes of relevant cards
+# Do not change the size of this data without updating ML model.
+# ML expects images in that size.
 hand_w = 48
 hand_h = 70
 card_w = 70
@@ -14,6 +14,7 @@ pot_h = 74
 action_w = 150
 action_h = 55
 
+# Update positions to match your screen.
 hand1 = (1964,597)
 hand2 = (2016,597)
 flop1 = (1812,434)
