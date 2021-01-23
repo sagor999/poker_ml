@@ -61,3 +61,11 @@ If you want to give this project a try (and maybe even expand on it)
 9. Run `make run` in the root folder of the project. It should start two containers and should start scanning for changes.
 10. ...
 11. Profit!
+
+## Screenshots
+
+Pre-flop example:
+![](images/pre-flop.png)
+
+Post-flop example:
+![](images/showdown.png)
