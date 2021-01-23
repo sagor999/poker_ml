@@ -1171,7 +1171,7 @@ fn main() -> Result<(), Error> {
   match mode {
     "once" => {
       if args.len() != 6 {
-        panic!("Not enough arguments provided. Expecting mode input_hand pot, got: {}", args.len());
+        panic!("Not enough arguments provided. Expecting 4, got: {}", args.len()-2);
       }
       // example hand input: "C8 H5 H7 D12 D6"
       // example put input: "Total pot: $1.30\nMain pot: $1.10\n\n"
