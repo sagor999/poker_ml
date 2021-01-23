@@ -4,9 +4,6 @@ hand_ranker/__pycache__/scores.cpython-39.pyc
 expected_value/data.bin
 expected_value/hands.csv
 hands.csv
-card_recognizer_ml/data/checkpoint
-card_recognizer_ml/data/cp.ckpt.data-00000-of-00001
-card_recognizer_ml/data/cp.ckpt.index
 data.bin
 starting_hands.bin
 card_recognizer_ml/data/test/1.png
@@ -21,8 +18,6 @@ card_recognizer_ml/data/add_to_train/*
 expected_value/data/combinations.bin
 ocr/data/trigger
 expected_value/data/input_hand
-card_recognizer_ml/data/model1.tf.data-00000-of-00001
-card_recognizer_ml/data/model1.tf.index
 expected_value/data/simulated_hands.bin
 hand_predictor_ml/data/ml_data.csv
 hand_predictor_ml/data/ml_val.csv
@@ -33,8 +28,6 @@ ocr/data/ocr2.png
 ocr/data/malformed/*
 expected_value/data/input_action
 expected_value/data/input_pot
-card_recognizer_ml/data/model2.tf.data-00000-of-00001
-card_recognizer_ml/data/model2.tf.index
 card_recognizer_ml/data/test/d1.png
 card_recognizer_ml/data/test/d2.png
 card_recognizer_ml/data/test/d3.png
